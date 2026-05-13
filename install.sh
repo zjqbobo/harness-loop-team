@@ -130,6 +130,7 @@ echo -e "${GREEN}║  • \"帮我写方案...\" → 文档生成全流程      
 echo -e "${GREEN}║  • \"帮我修bug...\" → 系统调试               ║${NC}"
 echo -e "${GREEN}║  • \"帮我review...\" → 代码审查              ║${NC}"
 echo -e "${GREEN}║  • \"帮我实现...\" → TDD + 编码规范          ║${NC}"
+echo -e "${GREEN}║  • \"帮我写测试...\" → 单测 + E2E             ║${NC}"
 echo -e "${GREEN}║                                           ║${NC}"
 echo -e "${GREEN}║  更新: cd ~/.claude/harness && git pull    ║${NC}"
 echo -e "${GREEN}║  卸载: rm ~/.claude/skills/harness-*       ║${NC}"

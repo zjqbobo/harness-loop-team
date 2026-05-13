@@ -21,6 +21,7 @@ cd ~/.claude/harness
 | "这个接口报 500 了帮我看看" | 系统调试四阶段 → 找根因 → 修 |
 | "帮我 review 这段代码" | 独立评审 → 规范检查 → 安全扫描 |
 | "帮我实现这个功能" | TDD → 红绿重构 → commit |
+| "帮我写个测试/测一下这个页面" | 单测 mock+覆盖 / E2E Playwright 截图 |
 
 ## Skill 列表
 
@@ -32,6 +33,7 @@ cd ~/.claude/harness
 | `harness-systematic-debugging` | 修bug、报错、不工作 | 四阶段根因调试 |
 | `harness-code-review` | review、审查、检查代码 | 三阶段独立评审 |
 | `harness-implementation` | 实现、开发、写代码 | TDD + 编码规范 |
+| `harness-testing` | 写测试、跑测试、E2E | 单测 + Playwright 截图 |
 
 ## 目录结构
 
@@ -50,7 +52,8 @@ harness-engineering/
 │   ├── harness-document-generation/
 │   ├── harness-systematic-debugging/
 │   ├── harness-code-review/
-│   └── harness-implementation/
+│   ├── harness-implementation/
+│   └── harness-testing/
 ├── 09-templates/                  # 文档模板
 │   ├── 系统设计文档模板.md
 │   ├── 系统接口设计文档模版.md

@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 650">
+  <defs>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#ea580c"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#16a34a"/>
+    </marker>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+  <style>
+    text { font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    .title { font-size: 18px; font-weight: 600; fill: #111827; }
+    .label { font-size: 14px; font-weight: 400; fill: #111827; }
+    .sub-label { font-size: 12px; fill: #6b7280; }
+    .small { font-size: 11px; fill: #6b7280; }
+  </style>
+  <rect width="960" height="650" fill="#ffffff"/>
+  <text x="480" y="32" text-anchor="middle" class="title">Skill 触发关系与链式移交</text>
+  <text x="480" y="52" text-anchor="middle" class="sub-label">6 个 Skill 通过 description 字段自然语言触发，通过链式移交实现端到端流程</text>
+  <rect x="330" y="80" width="300" height="65" rx="12" fill="#1e293b" stroke="#334155" stroke-width="2" filter="url(#shadow)"/>
+  <text x="480" y="105" text-anchor="middle" class="label" fill="#ffffff" font-weight="600">🟢 harness-entry</text>
+  <text x="480" y="125" text-anchor="middle" class="small" fill="#94a3b8">会话启动自动加载 · 建立纪律基线</text>
+  <text x="480" y="140" text-anchor="middle" class="small" fill="#64748b">"Use when starting any conversation"</text>
+  <path d="M 330 112 L 80 112 L 80 210" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arrow-blue)"/>
+  <path d="M 630 112 L 880 112 L 880 210" stroke="#ea580c" stroke-width="1.5" fill="none" marker-end="url(#arrow-orange)"/>
+  <line x1="410" y1="145" x2="410" y2="380" stroke="#16a34a" stroke-width="1.5" marker-end="url(#arrow-green)"/>
+  <rect x="20" y="212" width="240" height="65" rx="10" fill="#dbeafe" stroke="#60a5fa" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="140" y="237" text-anchor="middle" class="label" font-weight="600">harness-brainstorming</text>
+  <text x="140" y="255" text-anchor="middle" class="small">触发: 设计/方案/架构/分析</text>
+  <text x="140" y="270" text-anchor="middle" class="small">产出: committed spec 文档</text>
+  <rect x="700" y="212" width="240" height="65" rx="10" fill="#fef2f2" stroke="#f87171" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="820" y="237" text-anchor="middle" class="label" font-weight="600">harness-systematic-debugging</text>
+  <text x="820" y="255" text-anchor="middle" class="small">触发: 修bug/报错/不工作</text>
+  <text x="820" y="270" text-anchor="middle" class="small">四阶段 · 三次失败规则</text>
+  <path d="M 140 277 L 140 310 L 300 310 L 300 360" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arrow-blue)"/>
+  <rect x="108" y="298" width="64" height="18" rx="3" fill="#ffffff" opacity="0.95"/>
+  <text x="140" y="311" text-anchor="middle" class="small" fill="#2563eb">移交</text>
+  <rect x="150" y="362" width="270" height="65" rx="10" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="285" y="387" text-anchor="middle" class="label" font-weight="600">harness-implementation</text>
+  <text x="285" y="405" text-anchor="middle" class="small">触发: 实现/开发/写代码</text>
+  <text x="285" y="420" text-anchor="middle" class="small">TDD · RED→GREEN→REFACTOR</text>
+  <path d="M 420 395 L 500 395" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arrow-blue)"/>
+  <rect x="430" y="383" width="64" height="18" rx="3" fill="#ffffff" opacity="0.95"/>
+  <text x="462" y="396" text-anchor="middle" class="small" fill="#2563eb">移交</text>
+  <rect x="500" y="362" width="270" height="65" rx="10" fill="#faf5ff" stroke="#c084fc" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="635" y="387" text-anchor="middle" class="label" font-weight="600">harness-code-review</text>
+  <text x="635" y="405" text-anchor="middle" class="small">触发: review/审查/检查代码</text>
+  <text x="635" y="420" text-anchor="middle" class="small">角色分离 · 三阶段评审</text>
+  <rect x="250" y="480" width="460" height="65" rx="10" fill="#dcfce7" stroke="#4ade80" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="480" y="505" text-anchor="middle" class="label" font-weight="600">harness-document-generation</text>
+  <text x="480" y="523" text-anchor="middle" class="small">触发: 写文档/出方案/生成PRD · 模板遵循 → 配图 → MD草稿 → docx</text>
+  <text x="480" y="538" text-anchor="middle" class="small">依赖: brainstorming 设计确认 · 调用: mermaid-render.sh + md2docx.sh</text>
+  <path d="M 140 277 L 140 310 L 480 310 L 480 478" stroke="#16a34a" stroke-width="1.5" fill="none" marker-end="url(#arrow-green)"/>
+  <rect x="280" y="298" width="64" height="18" rx="3" fill="#ffffff" opacity="0.95"/>
+  <text x="312" y="311" text-anchor="middle" class="small" fill="#16a34a">方案确认后</text>
+  <rect x="30" y="570" width="900" height="65" rx="8" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="50" y="592" class="small" font-weight="600">图例:</text>
+  <rect x="100" y="582" width="20" height="12" rx="3" fill="#2563eb" opacity="0.3" stroke="#2563eb" stroke-width="1"/>
+  <text x="126" y="593" class="small">设计→实现→评审链 (蓝色)</text>
+  <rect x="290" y="582" width="20" height="12" rx="3" fill="#ea580c" opacity="0.3" stroke="#ea580c" stroke-width="1"/>
+  <text x="316" y="593" class="small">调试链 (橙色)</text>
+  <rect x="480" y="582" width="20" height="12" rx="3" fill="#16a34a" opacity="0.3" stroke="#16a34a" stroke-width="1"/>
+  <text x="506" y="593" class="small">文档生成链 (绿色)</text>
+  <rect x="690" y="582" width="20" height="12" rx="3" fill="#1e293b" opacity="0.3" stroke="#1e293b" stroke-width="1"/>
+  <text x="716" y="593" class="small">harness-entry 常驻入口 (深色)</text>
+  <text x="50" y="620" class="small" fill="#9ca3af">所有 Skill 通过 description 字段自动匹配自然语言，无需用户记忆命令或输入 / 前缀</text>
+</svg>

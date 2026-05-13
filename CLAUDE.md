@@ -15,6 +15,7 @@
 | "修bug/报错/不工作..." | `harness-systematic-debugging` | 四阶段根因分析，不猜 |
 | "review/审查代码..." | `harness-code-review` | 独立评审，禁止自审 |
 | "实现/开发/写代码..." | `harness-implementation` | TDD + 编码规范 |
+| "写测试/跑测试/端到端..." | `harness-testing` | 单测(mock+coverage) + E2E(Playwright) |
 
 触发方式：**自然语言**，无需 `/` 命令。
 
@@ -25,6 +26,7 @@
 3. 任何 bug 必须先找根因 → 稳定复现 → 才修
 4. 禁止临时写脚本代替标准工具脚本
 5. 禁止凭印象生成代替读模板
+6. 编码完成后必须走测试 → 单测覆盖 ≥80% + E2E 截图验证
 
 ## 文档路径
 

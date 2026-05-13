@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 900">
+  <defs>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#16a34a"/>
+    </marker>
+    <marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#ea580c"/>
+    </marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#9333ea"/>
+    </marker>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+  <style>
+    text { font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    .title { font-size: 18px; font-weight: 600; fill: #111827; }
+    .label { font-size: 14px; font-weight: 400; fill: #111827; }
+    .sub-label { font-size: 12px; fill: #6b7280; }
+    .small { font-size: 11px; fill: #6b7280; }
+  </style>
+  <rect width="960" height="900" fill="#ffffff"/>
+  <text x="480" y="32" text-anchor="middle" class="title">完整工作流：从自然语言到交付</text>
+  <text x="480" y="52" text-anchor="middle" class="sub-label">用户只需说出口语化需求，系统自动匹配 Skill → 链式执行 → 输出交付物</text>
+  <!-- Phase 1: Trigger -->
+  <rect x="50" y="80" width="70" height="26" rx="13" fill="#2563eb"/>
+  <text x="85" y="97" text-anchor="middle" class="small" fill="#ffffff" font-weight="600">Phase 1</text>
+  <text x="130" y="97" class="label" font-weight="600">自然语言匹配</text>
+  <rect x="250" y="72" width="660" height="42" rx="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1" filter="url(#shadow)"/>
+  <text x="580" y="90" text-anchor="middle" class="label">用户: "帮我写一个用户中心的方案文档"</text>
+  <text x="580" y="106" text-anchor="middle" class="small">→ 扫描所有 skill description 字段 → 匹配 harness-document-generation</text>
+  <line x1="480" y1="135" x2="480" y2="150" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <rect x="50" y="152" width="70" height="26" rx="13" fill="#ea580c"/>
+  <text x="85" y="169" text-anchor="middle" class="small" fill="#ffffff" font-weight="600">Phase 2</text>
+  <text x="130" y="169" class="label" font-weight="600">方案设计 (brainstorming)</text>
+  <rect x="250" y="182" width="660" height="30" rx="6" fill="#fff7ed" stroke="#fed7aa" stroke-width="1"/>
+  <text x="580" y="201" text-anchor="middle" class="small" fill="#111827">探索项目现状 → 逐条提问 → 提出 2-3 方案 → 分节展示设计</text>
+  <rect x="250" y="212" width="660" height="30" rx="6" fill="#fff7ed" stroke="#fed7aa" stroke-width="1"/>
+  <text x="580" y="231" text-anchor="middle" class="small" fill="#111827">设计写入 spec 文件 → 自检 TBD/矛盾/歧义 → 用户审阅</text>
+  <rect x="350" y="250" width="260" height="30" rx="6" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="480" y="270" text-anchor="middle" class="label" fill="#991b1b" font-weight="600">⛔ HARD GATE: 用户确认前禁止写代码</text>
+  <line x1="480" y1="295" x2="480" y2="310" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <rect x="50" y="312" width="70" height="26" rx="13" fill="#16a34a"/>
+  <text x="85" y="329" text-anchor="middle" class="small" fill="#ffffff" font-weight="600">Phase 3</text>
+  <text x="130" y="329" class="label" font-weight="600">文档生成 (document-generation)</text>
+  <rect x="250" y="342" width="660" height="30" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+  <text x="580" y="361" text-anchor="middle" class="small" fill="#111827">Read 对应模板 → 逐节匹配结构 → 生成 MD 草稿（含 Mermaid 代码块）</text>
+  <rect x="250" y="372" width="660" height="30" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+  <text x="580" y="391" text-anchor="middle" class="small" fill="#111827">询问图表工具 → 生成 SVG/PNG → 嵌入文档</text>
+  <rect x="250" y="402" width="660" height="30" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+  <text x="580" y="421" text-anchor="middle" class="small" fill="#111827">用户审阅 MD 草稿 → 确认通过</text>
+  <rect x="350" y="440" width="260" height="30" rx="6" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="480" y="460" text-anchor="middle" class="label" fill="#991b1b" font-weight="600">⛔ HARD GATE: 禁止临时写脚本代替标准工具</text>
+  <line x1="480" y1="485" x2="480" y2="500" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <rect x="50" y="502" width="70" height="26" rx="13" fill="#9333ea"/>
+  <text x="85" y="519" text-anchor="middle" class="small" fill="#ffffff" font-weight="600">Phase 4</text>
+  <text x="130" y="519" class="label" font-weight="600">转换交付</text>
+  <rect x="250" y="532" width="660" height="30" rx="6" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1"/>
+  <text x="580" y="551" text-anchor="middle" class="small" fill="#111827">mermaid-render.sh 提取 .mmd + 渲染 PNG + 替换代码块</text>
+  <rect x="250" y="562" width="660" height="30" rx="6" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1"/>
+  <text x="580" y="581" text-anchor="middle" class="small" fill="#111827">对每个 .md 执行 md2docx.sh → 批量转 Word</text>
+  <rect x="250" y="592" width="660" height="30" rx="6" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1"/>
+  <text x="580" y="611" text-anchor="middle" class="small" fill="#111827">逐项检查 · 全部 .md 必须转 .docx · 交付完成 ✓</text>
+  <rect x="330" y="648" width="300" height="42" rx="21" fill="#16a34a" filter="url(#shadow)"/>
+  <text x="480" y="674" text-anchor="middle" class="label" fill="#ffffff" font-weight="600">✅ 交付物：.md 草稿 + .docx 正式文档</text>
+  <rect x="30" y="840" width="900" height="50" rx="8" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="50" y="862" class="small" font-weight="600">图例:</text>
+  <line x1="100" y1="856" x2="130" y2="856" stroke="#2563eb" stroke-width="2"/>
+  <text x="136" y="861" class="small">主流程 (Phase 1-4)</text>
+  <line x1="280" y1="856" x2="310" y2="856" stroke="#ea580c" stroke-width="2"/>
+  <text x="316" y="861" class="small">Brainstorming 阶段</text>
+  <line x1="480" y1="856" x2="510" y2="856" stroke="#16a34a" stroke-width="2"/>
+  <text x="516" y="861" class="small">文档生成阶段</text>
+  <line x1="680" y1="856" x2="710" y2="856" stroke="#9333ea" stroke-width="2"/>
+  <text x="716" y="861" class="small">转换交付阶段</text>
+</svg>
