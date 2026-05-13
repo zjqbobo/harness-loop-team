@@ -201,7 +201,7 @@ Skill 之间通过明确的"移交规则"实现端到端流程链路：
 
 ### 4.1 前置条件
 
-- macOS / Linux 环境
+- macOS / Linux（含 Windows WSL2）环境
 - 已安装 [Claude Code](https://claude.ai/code) CLI
 - 已安装 Git
 - （可选）pandoc — 用于 md2docx.sh 文档转换

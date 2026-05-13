@@ -11,7 +11,9 @@ WIDTH="${2:-1920}"
 
 # 检查依赖
 if ! command -v rsvg-convert &> /dev/null; then
-    echo "❌ 未找到 rsvg-convert，请先安装: brew install librsvg"
+    echo "❌ 未找到 rsvg-convert，请先安装:"
+    echo "   macOS: brew install librsvg"
+    echo "   Linux: sudo apt install librsvg2-bin"
     exit 1
 fi
 

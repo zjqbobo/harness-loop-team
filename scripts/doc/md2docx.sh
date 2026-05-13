@@ -23,7 +23,9 @@ fi
 
 # 检查 pandoc
 if ! command -v pandoc &> /dev/null; then
-    echo "❌ 未找到 pandoc，请先安装: brew install pandoc"
+    echo "❌ 未找到 pandoc，请先安装:"
+    echo "   macOS: brew install pandoc"
+    echo "   Linux: sudo apt install pandoc"
     exit 1
 fi
 

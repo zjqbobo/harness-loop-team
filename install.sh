@@ -75,14 +75,23 @@ check_npm() {
     fi
 }
 
+# OS 检测
+case "$(uname -s)" in
+    Linux)  OS="linux";  PKG="apt install";  PKG_RSVG="apt install librsvg2-bin" ;;
+    Darwin) OS="macos";  PKG="brew install";  PKG_RSVG="brew install librsvg" ;;
+    *)      OS="unknown"; PKG="(请用系统包管理器安装)"; PKG_RSVG="(请用系统包管理器安装 librsvg)" ;;
+esac
+echo -e "   ℹ️  检测系统: ${OS}"
+
 # 系统命令
+echo ""
 echo -e "   ${CYAN}[必装] 核心工具链${NC}"
-check_cmd git          "git"              critical "brew install git"
-check_cmd node         "Node.js"           critical "brew install node@22"
+check_cmd git          "git"              critical "${PKG} git"
+check_cmd node         "Node.js"           critical "${PKG} nodejs 或 brew install node@22"
 check_cmd npx          "npx"               critical "自带于 Node.js"
-check_cmd pandoc       "pandoc"            critical "brew install pandoc"
-check_cmd rsvg-convert "rsvg-convert"     critical "brew install librsvg"
-check_cmd python3      "Python 3"          critical "系统自带或 brew install python@3"
+check_cmd pandoc       "pandoc"            critical "${PKG} pandoc"
+check_cmd rsvg-convert "rsvg-convert"     critical "${PKG_RSVG}"
+check_cmd python3      "Python 3"          critical "系统自带或 ${PKG} python3"
 
 echo ""
 

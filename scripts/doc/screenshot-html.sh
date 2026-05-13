@@ -14,12 +14,14 @@ HEIGHT="${4:-2000}"
 find_browser() {
   local pw pw_path pup pup_path sys_chrome
 
-  # 1. Playwright Chromium
-  pw_path="$HOME/Library/Caches/ms-playwright"
-  if [ -d "$pw_path" ]; then
-    pw="$(find "$pw_path" -name "chrome-headless-shell" -type f 2>/dev/null | sort -V | tail -1)"
-    [ -n "$pw" ] && echo "$pw" && return 0
-  fi
+  # 1. Playwright Chromium (macOS + Linux)
+  pw_paths="$HOME/Library/Caches/ms-playwright $HOME/.cache/ms-playwright"
+  for pw_path in $pw_paths; do
+    if [ -d "$pw_path" ]; then
+      pw="$(find "$pw_path" -name "chrome-headless-shell" -type f 2>/dev/null | sort -V | tail -1)"
+      [ -n "$pw" ] && echo "$pw" && return 0
+    fi
+  done
 
   # 2. Puppeteer Chromium
   pup_path="$HOME/.cache/puppeteer"
