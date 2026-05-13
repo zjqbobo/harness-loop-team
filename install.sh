@@ -33,6 +33,107 @@ echo -e "${CYAN}║   Harness Engineering — 安装中...         ║${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════╝${NC}"
 echo ""
 
+# ── 0. 依赖检查 ──────────────────────────────────────
+
+echo -e "${CYAN}🔍 检查依赖...${NC}"
+echo ""
+
+missing_critical=0
+missing_recommended=0
+
+check_cmd() {
+    local cmd="$1" label="$2" level="$3" hint="$4"
+    if command -v "$cmd" &>/dev/null; then
+        local ver="$($cmd --version 2>/dev/null | head -1 | tr '\n' ' ')"
+        echo -e "   ${GREEN}✅${NC} ${label}: ${ver}"
+        return 0
+    else
+        echo -e "   ${RED}❌${NC} ${label}: 未安装  →  ${hint}"
+        if [ "$level" = "critical" ]; then
+            missing_critical=$((missing_critical + 1))
+        elif [ "$level" = "recommended" ]; then
+            missing_recommended=$((missing_recommended + 1))
+        fi
+        return 1
+    fi
+}
+
+check_npm() {
+    local pkg="$1" label="$2" level="$3" hint="$4"
+    if npm list -g "$pkg" --depth=0 2>/dev/null | grep -q "$pkg"; then
+        local ver="$(npm list -g "$pkg" --depth=0 2>/dev/null | grep "$pkg" | sed 's/.*@//')"
+        echo -e "   ${GREEN}✅${NC} ${label}: ${ver}"
+        return 0
+    else
+        echo -e "   ${RED}❌${NC} ${label}: 未安装  →  ${hint}"
+        if [ "$level" = "critical" ]; then
+            missing_critical=$((missing_critical + 1))
+        elif [ "$level" = "recommended" ]; then
+            missing_recommended=$((missing_recommended + 1))
+        fi
+        return 1
+    fi
+}
+
+# 系统命令
+echo -e "   ${CYAN}[必装] 核心工具链${NC}"
+check_cmd git          "git"              critical "brew install git"
+check_cmd node         "Node.js"           critical "brew install node@22"
+check_cmd npx          "npx"               critical "自带于 Node.js"
+check_cmd pandoc       "pandoc"            critical "brew install pandoc"
+check_cmd rsvg-convert "rsvg-convert"     critical "brew install librsvg"
+check_cmd python3      "Python 3"          critical "系统自带或 brew install python@3"
+
+echo ""
+
+# npm 全局包
+echo -e "   ${CYAN}[必装] npm 全局包${NC}"
+check_npm "@anthropic-ai/claude-code"  "Claude Code CLI"    critical "npm install -g @anthropic-ai/claude-code"
+check_npm "@mermaid-js/mermaid-cli"    "mermaid-cli (mmdc)" critical "npm install -g @mermaid-js/mermaid-cli"
+
+echo ""
+
+# 推荐依赖
+echo -e "   ${YELLOW}[推荐] E2E 测试${NC}"
+echo -e "   ℹ️  Playwright 检测方式: npx playwright --version"
+if npx playwright --version &>/dev/null 2>&1; then
+    echo -e "   ${GREEN}✅${NC} Playwright: $(npx playwright --version 2>/dev/null)"
+else
+    echo -e "   ${RED}❌${NC} Playwright: 未安装  →  npx playwright install chromium"
+    missing_recommended=$((missing_recommended + 1))
+fi
+
+echo ""
+
+echo -e "   ${YELLOW}[可选] 增强工具${NC}"
+check_npm "agent-browser" "agent-browser" optional "npm install -g agent-browser && agent-browser install"
+
+echo ""
+
+# 汇总
+if [ "$missing_critical" -gt 0 ] || [ "$missing_recommended" -gt 0 ]; then
+    echo -e "${YELLOW}╔══════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║  ⚠️  依赖检查未通过                        ║${NC}"
+    echo -e "${YELLOW}╠══════════════════════════════════════════╣${NC}"
+    if [ "$missing_critical" -gt 0 ]; then
+        echo -e "${YELLOW}║  🔴 必装缺失 ${missing_critical} 项 — 请先安装再继续         ║${NC}"
+    fi
+    if [ "$missing_recommended" -gt 0 ]; then
+        echo -e "${YELLOW}║  🟡 推荐缺失 ${missing_recommended} 项 — 部分功能不可用      ║${NC}"
+    fi
+    echo -e "${YELLOW}╚══════════════════════════════════════════╝${NC}"
+    echo ""
+    if [ "$missing_critical" -gt 0 ]; then
+        echo -e "${RED}必装依赖缺失，终止安装。请按上方提示安装后重试。${NC}"
+        exit 1
+    fi
+    echo -e "${CYAN}推荐依赖缺失不影响核心功能，继续安装...${NC}"
+else
+    echo -e "${GREEN}✅ 所有依赖检查通过${NC}"
+fi
+
+echo ""
+
 # ── 1. 注册 skills ──────────────────────────────────────
 
 echo -e "${CYAN}📦 注册自然语言触发 skills...${NC}"

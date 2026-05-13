@@ -13,7 +13,7 @@ description: Use when user asks to 生成文档, 写方案, 出文档, 写设计
 1. 触发 brainstorming → 用户确认方案
 2. Read 对应模板（`~/.claude/harness/09-templates/`）→ 逐节匹配
 3. 生成 MD 草稿 → 用户审阅
-4. 图表嵌入 + 所有 .md 转 .docx
+4. 架构图嵌入 + 原型生成（PRD/产品文档必须） + 所有 .md 转 .docx
 跳过任意一步 = 违规。
 </HARD-GATE>
 
@@ -24,9 +24,15 @@ description: Use when user asks to 生成文档, 写方案, 出文档, 写设计
 → Read 对应模板文件
 → 逐节匹配，禁止凭印象生成
 
-### Phase 2: 图表生成
+### Phase 2: 架构图生成
 → Read `~/.claude/harness/01-rules/04-document-standards/01-docs-workflow.md#1️⃣`
 → 询问工具选择：技术文档 → mermaid / fireworks-tech-graph；产品文档 → Figma / Frontend Design
+
+### Phase 2.5: 原型生成（PRD/产品文档硬性要求）
+→ 🔴 如文档类型为 PRD/产品方案 → 必须询问原型工具选择：Figma MCP / ui-ux-pro-max
+→ 🔴 生成真实原型 → Playwright 截图 → 嵌入 PNG → 替换文档中所有 ASCII 线框图
+→ 🔴 禁止保留 ASCII 线框图（`┌───┐`）占位，禁止用文字描述代替截图
+→ 原型截图宽度 ≥ 1200px，全流程自动化，无需用户干预
 
 ### Phase 3: 生成 MD 草稿 + 图表嵌入
 → Mermaid 代码块必须以 .mmd 源文件保存并渲染 PNG
@@ -64,3 +70,5 @@ description: Use when user asks to 生成文档, 写方案, 出文档, 写设计
 - ❌ 只生成 md 不转 docx
 - ❌ 临时写 Python/Node.js 脚本代替标准工具脚本
 - ❌ 生成无图纯文本文档
+- ❌ PRD/产品文档用 ASCII 线框图代替真实UI原型截图
+- ❌ PRD/产品文档不询问原型工具选择（Figma / ui-ux-pro-max）直接交付
