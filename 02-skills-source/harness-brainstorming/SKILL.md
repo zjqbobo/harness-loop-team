@@ -36,21 +36,21 @@ This applies to EVERY task regardless of perceived simplicity.
 ### Step 4: 分节展示设计方案
 - 每个章节按复杂度缩放（简单→几句话，复杂→200-300 词）
 - 覆盖：架构、组件、数据流、错误处理、测试策略
-- 🔴 **架构图/流程图/组件图/数据流图必须使用 Mermaid 代码块（\`\`\`mermaid）编写，禁止使用 ASCII 线框图（┌┐└┘├┤│─ 等制表符）**
+- 🔴 **架构图/流程图/组件图/数据流图禁止使用 ASCII 线框图（┌┐└┘├┤│─ 等制表符），必须询问用户选择图表工具后绘制：技术文档 → mermaid / fireworks-tech-graph**
 - 🔴 **路由矩阵/对比表等表格数据使用 Markdown 表格，禁止包在 ASCII 框里**
 - 每段展示后确认是否正确
 
 ### Step 5: 设计写入 spec 文件
 - 路径：`~/.claude/harness/04-changes/YYYYMMDD-<主题>/00-design.md`
-- 🔴 写入前检查：spec 中是否存在 ASCII 线框图？如有，必须先替换为 Mermaid 代码块
+- 🔴 写入前检查：spec 中是否存在 ASCII 线框图？如有，必须先替换为 Mermaid 代码块或 fireworks-tech-graph 代码（取决于用户选择）
 - 提交到 git
 
 ### Step 5.5: 文档图表渲染与交付（方案输出类任务必经）
 - 🔴 如产出为设计文档/方案文档 → 必须链入 `harness-document-generation`
 - `harness-document-generation` Phase 2: 确认图表工具选择
-- `harness-document-generation` Phase 3: 将所有 Mermaid 代码块渲染为 PNG 截图，替换到 MD 中
-- `harness-document-generation` Phase 5: 执行 mermaid-render.sh → md2docx.sh，输出带截图的 DOCX
-- 最终 DOCX 中所有架构图/流程图必须为**渲染后的 PNG 截图**，禁止留有 ASCII 框线或未渲染的 Mermaid 代码块
+- `harness-document-generation` Phase 3: 将所有图表代码块渲染为 PNG 截图（Mermaid 用 mermaid-render.sh，fireworks 用 svg2png.sh），替换到 MD 中
+- `harness-document-generation` Phase 5: 执行渲染脚本 → md2docx.sh，输出带截图的 DOCX
+- 最终 DOCX 中所有架构图/流程图必须为**渲染后的 PNG 截图**，禁止留有 ASCII 框线或未渲染的图表代码块
 
 ### Step 6: Spec 自检
 - 扫描 TBD/TODO、不完整章节
