@@ -678,21 +678,7 @@ Agent 平台层是产品的**核心引擎**：让 Agent 被构建、运行、管
 
 ### 5.2 Agent 生命周期
 
-```mermaid
-stateDiagram-v2
-    [*] --> Draft: 创建
-    Draft --> Testing: 提交测试
-    Draft --> Draft: 编辑中
-    Testing --> Draft: 测试不通过
-    Testing --> Review: 测试通过
-    Review --> Published: 审核通过
-    Review --> Draft: 驳回修改
-    Published --> Running: 部署上线
-    Running --> Suspended: 暂停
-    Suspended --> Running: 恢复
-    Running --> Archived: 下线
-    Archived --> [*]
-```
+![Mermaid state diagram](images/mermaid-state-01.png)
 
 | 阶段 | 触发者 | 关键行为 | 产出物 |
 |------|--------|---------|--------|
