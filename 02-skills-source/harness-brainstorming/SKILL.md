@@ -36,23 +36,35 @@ This applies to EVERY task regardless of perceived simplicity.
 ### Step 4: 分节展示设计方案
 - 每个章节按复杂度缩放（简单→几句话，复杂→200-300 词）
 - 覆盖：架构、组件、数据流、错误处理、测试策略
+- 🔴 **架构图/流程图/组件图/数据流图必须使用 Mermaid 代码块（\`\`\`mermaid）编写，禁止使用 ASCII 线框图（┌┐└┘├┤│─ 等制表符）**
+- 🔴 **路由矩阵/对比表等表格数据使用 Markdown 表格，禁止包在 ASCII 框里**
 - 每段展示后确认是否正确
 
 ### Step 5: 设计写入 spec 文件
 - 路径：`~/.claude/harness/04-changes/YYYYMMDD-<主题>/00-design.md`
+- 🔴 写入前检查：spec 中是否存在 ASCII 线框图？如有，必须先替换为 Mermaid 代码块
 - 提交到 git
+
+### Step 5.5: 文档图表渲染与交付（方案输出类任务必经）
+- 🔴 如产出为设计文档/方案文档 → 必须链入 `harness-document-generation`
+- `harness-document-generation` Phase 2: 确认图表工具选择
+- `harness-document-generation` Phase 3: 将所有 Mermaid 代码块渲染为 PNG 截图，替换到 MD 中
+- `harness-document-generation` Phase 5: 执行 mermaid-render.sh → md2docx.sh，输出带截图的 DOCX
+- 最终 DOCX 中所有架构图/流程图必须为**渲染后的 PNG 截图**，禁止留有 ASCII 框线或未渲染的 Mermaid 代码块
 
 ### Step 6: Spec 自检
 - 扫描 TBD/TODO、不完整章节
+- 🔴 扫描 ASCII 制表符（┌┐└┘├┤│─）残留，如有则阻断
 - 检查内部矛盾
 - 确认范围明确、无歧义
 
 ### Step 7: 用户审阅 spec
-- 请用户审阅 spec 文件
+- 请用户审阅 spec 文件（含渲染后的图表 PNG 截图）
 - 用户确认后才进入下一步
 
-### Step 8: 移交 writing-plans
-- 终态：移交 `harness-implementation`（执行计划阶段）
+### Step 8: 移交下一步
+- 编码类任务：移交 `harness-implementation`（执行计划阶段）
+- 文档类任务：移交 `harness-document-generation`（文档渲染和转换交付）
 - 不直接调用编码相关 skill
 
 ## 反模式
