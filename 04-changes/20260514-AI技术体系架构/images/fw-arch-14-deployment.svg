@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520">
+  <defs>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/></marker>
+    <filter id="shadow" x="-3%" y="-3%" width="108%" height="108%"><feDropShadow dx="1" dy="2" stdDeviation="2" flood-opacity="0.06"/></filter>
+  </defs>
+  <style>text { font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }</style>
+  <rect width="960" height="520" fill="#ffffff"/>
+  <text x="480" y="22" text-anchor="middle" font-size="14" font-weight="600" fill="#111827">SaaS 部署拓扑</text>
+
+  <!-- Global LB -->
+  <rect x="330" y="40" width="300" height="34" rx="6" fill="#1e293b"/>
+  <text x="480" y="62" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">Global Load Balancer (DNS Geo-routing + Health Check)</text>
+
+  <line x1="480" y1="74" x2="480" y2="95" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <!-- API Gateway -->
+  <rect x="310" y="100" width="340" height="34" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="480" y="122" text-anchor="middle" font-size="11" font-weight="600" fill="#1d4ed8">API Gateway Cluster (APISIX + WAF + Rate Limiting)</text>
+
+  <!-- 4 way split -->
+  <path d="M 360 134 L 360 160 L 200 160" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arrow-blue)"/>
+  <path d="M 440 134 L 440 160 L 310 160" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arrow-blue)"/>
+  <path d="M 520 134 L 520 160 L 650 160" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arrow-blue)"/>
+  <path d="M 600 134 L 600 160 L 760 160" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arrow-blue)"/>
+
+  <!-- Service Boxes -->
+  <rect x="60" y="165" width="190" height="120" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="60" y="165" width="190" height="22" rx="8" fill="#2563eb"/>
+  <rect x="60" y="175" width="190" height="12" fill="#2563eb"/>
+  <text x="155" y="181" text-anchor="middle" font-size="10" font-weight="600" fill="#fff">Control Plane</text>
+  <text x="80" y="202" font-size="9" fill="#374151">租户管理 · 权限</text>
+  <text x="80" y="218" font-size="9" fill="#374151">Agent 管理 · 计费</text>
+  <text x="80" y="234" font-size="9" fill="#374151">配置中心 · 审计</text>
+  <text x="80" y="256" font-size="9" fill="#6b7280">PostgreSQL + Redis</text>
+
+  <rect x="270" y="165" width="190" height="120" rx="8" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="270" y="165" width="190" height="22" rx="8" fill="#dc2626"/>
+  <rect x="270" y="175" width="190" height="12" fill="#dc2626"/>
+  <text x="365" y="181" text-anchor="middle" font-size="10" font-weight="600" fill="#fff">Agent Runtime</text>
+  <text x="290" y="202" font-size="9" fill="#374151">编排引擎 · 技能执行</text>
+  <text x="290" y="218" font-size="9" fill="#374151">记忆系统 · 评估</text>
+  <text x="290" y="234" font-size="9" fill="#374151">对话管理 · Agent Router</text>
+  <text x="290" y="256" font-size="9" fill="#6b7280">LangGraph + 自研引擎</text>
+
+  <rect x="480" y="165" width="190" height="120" rx="8" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="480" y="165" width="190" height="22" rx="8" fill="#7c3aed"/>
+  <rect x="480" y="175" width="190" height="12" fill="#7c3aed"/>
+  <text x="575" y="181" text-anchor="middle" font-size="10" font-weight="600" fill="#fff">AI Service</text>
+  <text x="500" y="202" font-size="9" fill="#374151">模型网关 · RAG 引擎</text>
+  <text x="500" y="218" font-size="9" fill="#374151">Prompt Hub · 知识图谱</text>
+  <text x="500" y="234" font-size="9" fill="#374151">MLOps · 语义缓存</text>
+  <text x="500" y="256" font-size="9" fill="#6b7280">LiteLLM + LlamaIndex</text>
+
+  <rect x="690" y="165" width="210" height="120" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="690" y="165" width="210" height="22" rx="8" fill="#16a34a"/>
+  <rect x="690" y="175" width="210" height="12" fill="#16a34a"/>
+  <text x="795" y="181" text-anchor="middle" font-size="10" font-weight="600" fill="#fff">Infra Services</text>
+  <text x="710" y="202" font-size="9" fill="#374151">Milvus (向量DB)</text>
+  <text x="710" y="218" font-size="9" fill="#374151">Neo4j (图DB)</text>
+  <text x="710" y="234" font-size="9" fill="#374151">Kafka · Redis · MinIO</text>
+  <text x="710" y="256" font-size="9" fill="#6b7280">Prometheus · Grafana</text>
+
+  <!-- GPU Pool -->
+  <line x1="660" y1="225" x2="720" y2="310" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arrow-blue)"/>
+
+  <rect x="290" y="315" width="380" height="60" rx="8" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="290" y="315" width="380" height="22" rx="8" fill="#ea580c"/>
+  <rect x="290" y="325" width="380" height="12" fill="#ea580c"/>
+  <text x="480" y="331" text-anchor="middle" font-size="10" font-weight="600" fill="#fff">GPU 推理集群 (独立池)</text>
+  <rect x="305" y="345" width="110" height="22" rx="4" fill="#fff" stroke="#fdba74" stroke-width="1"/>
+  <text x="360" y="361" text-anchor="middle" font-size="9" fill="#c2410c">A100×8 (高吞吐)</text>
+  <rect x="425" y="345" width="110" height="22" rx="4" fill="#fff" stroke="#fdba74" stroke-width="1"/>
+  <text x="480" y="361" text-anchor="middle" font-size="9" fill="#c2410c">H100×8 (低延迟)</text>
+  <rect x="545" y="345" width="110" height="22" rx="4" fill="#fff" stroke="#fdba74" stroke-width="1"/>
+  <text x="600" y="361" text-anchor="middle" font-size="9" fill="#c2410c">昇腾×8 (信创)</text>
+
+  <!-- Private deployment min -->
+  <text x="480" y="410" text-anchor="middle" font-size="11" font-weight="600" fill="#374151">私有化部署最小拓扑</text>
+  <rect x="120" y="420" width="720" height="50" rx="6" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+  <text x="480" y="438" text-anchor="middle" font-size="10" fill="#374151">K8s 3-Node Cluster | 64 vCPU + 256GB RAM + 1×A100 GPU (或 2×T4)</text>
+  <text x="480" y="455" text-anchor="middle" font-size="9" fill="#6b7280">Node 1: Control Plane + API | Node 2: Agent Runtime + AI Service | Node 3: GPU Inference + DB</text>
+
+  <!-- Optional integrations -->
+  <rect x="200" y="478" width="560" height="30" rx="5" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="480" y="497" text-anchor="middle" font-size="9" fill="#6b7280">可选: 对接客户 LDAP/SSO · S3/NAS 存储 · Kafka 集群 · 内置: ArgoCD + GitHub Actions CI/CD</text>
+
+</svg>

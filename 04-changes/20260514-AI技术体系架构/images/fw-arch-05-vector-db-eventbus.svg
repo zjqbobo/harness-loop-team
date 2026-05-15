@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 350">
+  <defs>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/></marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#16a34a"/></marker>
+    <filter id="shadow" x="-3%" y="-3%" width="108%" height="108%"><feDropShadow dx="1" dy="2" stdDeviation="2" flood-opacity="0.06"/></filter>
+  </defs>
+  <style>text { font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }</style>
+  <rect width="960" height="350" fill="#ffffff"/>
+  <text x="480" y="22" text-anchor="middle" font-size="14" font-weight="600" fill="#111827">向量数据库与事件总线架构</text>
+
+  <!-- Vector DB Section -->
+  <text x="240" y="50" text-anchor="middle" font-size="12" font-weight="600" fill="#2563eb">向量数据库 Proxy</text>
+
+  <rect x="90" y="60" width="300" height="36" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="240" y="83" text-anchor="middle" font-size="11" font-weight="600" fill="#1d4ed8">Vector DB Proxy (读写分离+统一路由)</text>
+
+  <path d="M 170 96 L 170 115 L 100 115 L 100 128" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arrow-blue)"/>
+  <path d="M 240 96 L 240 128" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arrow-blue)"/>
+  <path d="M 310 96 L 310 115 L 380 115 L 380 128" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arrow-blue)"/>
+
+  <rect x="12" y="132" width="176" height="50" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+  <text x="100" y="152" text-anchor="middle" font-size="10" font-weight="600" fill="#15803d">Milvus (分布式)</text>
+  <text x="100" y="168" text-anchor="middle" font-size="9" fill="#6b7280">主存储 · 十亿级</text>
+
+  <rect x="208" y="132" width="176" height="50" rx="6" fill="#fef2f2" stroke="#fca5a5" stroke-width="1"/>
+  <text x="296" y="152" text-anchor="middle" font-size="10" font-weight="600" fill="#b91c1c">Qdrant (单节点)</text>
+  <text x="296" y="168" text-anchor="middle" font-size="9" fill="#6b7280">热缓存 · P99&lt;5ms</text>
+
+  <rect x="404" y="132" width="176" height="50" rx="6" fill="#fff7ed" stroke="#fdba74" stroke-width="1"/>
+  <text x="492" y="152" text-anchor="middle" font-size="10" font-weight="600" fill="#c2410c">Elasticsearch</text>
+  <text x="492" y="168" text-anchor="middle" font-size="9" fill="#6b7280">BM25+向量混合检索</text>
+
+  <!-- Event Bus Section -->
+  <text x="720" y="50" text-anchor="middle" font-size="12" font-weight="600" fill="#7c3aed">事件总线 (Kafka)</text>
+
+  <rect x="600" y="60" width="240" height="36" rx="6" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="720" y="83" text-anchor="middle" font-size="11" font-weight="600" fill="#7c3aed">Event Bus</text>
+
+  <path d="M 660 96 L 660 128" stroke="#7c3aed" stroke-width="1.5" fill="none" marker-end="url(#arrow-green)"/>
+  <path d="M 720 96 L 720 128" stroke="#7c3aed" stroke-width="1.5" fill="none" marker-end="url(#arrow-green)"/>
+  <path d="M 780 96 L 780 128" stroke="#7c3aed" stroke-width="1.5" fill="none" marker-end="url(#arrow-green)"/>
+
+  <rect x="610" y="132" width="100" height="66" rx="6" fill="#faf5ff" stroke="#d8b4fe" stroke-width="1"/>
+  <text x="660" y="150" text-anchor="middle" font-size="9" font-weight="600" fill="#7c3aed">Agent 事件流</text>
+  <text x="659" y="165" text-anchor="middle" font-size="8" fill="#6b7280">Agent 状态</text>
+  <text x="659" y="178" text-anchor="middle" font-size="8" fill="#6b7280">步骤推进</text>
+  <text x="659" y="191" text-anchor="middle" font-size="8" fill="#6b7280">评估结果</text>
+
+  <rect x="720" y="132" width="100" height="66" rx="6" fill="#faf5ff" stroke="#d8b4fe" stroke-width="1"/>
+  <text x="770" y="150" text-anchor="middle" font-size="9" font-weight="600" fill="#7c3aed">系统事件流</text>
+  <text x="769" y="165" text-anchor="middle" font-size="8" fill="#6b7280">模型上下线</text>
+  <text x="769" y="178" text-anchor="middle" font-size="8" fill="#6b7280">计费事件</text>
+  <text x="769" y="191" text-anchor="middle" font-size="8" fill="#6b7280">审计日志</text>
+
+  <rect x="830" y="132" width="110" height="66" rx="6" fill="#faf5ff" stroke="#d8b4fe" stroke-width="1"/>
+  <text x="885" y="150" text-anchor="middle" font-size="9" font-weight="600" fill="#7c3aed">业务事件流</text>
+  <text x="884" y="165" text-anchor="middle" font-size="8" fill="#6b7280">行业数据</text>
+  <text x="884" y="178" text-anchor="middle" font-size="8" fill="#6b7280">变更通知</text>
+
+  <!-- Multi-tenancy strategy -->
+  <text x="480" y="235" text-anchor="middle" font-size="11" font-weight="600" fill="#374151">多租户隔离策略</text>
+  <rect x="80" y="248" width="370" height="40" rx="6" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1"/>
+  <text x="265" y="264" text-anchor="middle" font-size="10" font-weight="600" fill="#15803d">SaaS: Collection + partition_key 逻辑隔离</text>
+  <text x="265" y="280" text-anchor="middle" font-size="9" fill="#6b7280">共享基础设施,降低成本</text>
+  <rect x="470" y="248" width="410" height="40" rx="6" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1"/>
+  <text x="675" y="264" text-anchor="middle" font-size="10" font-weight="600" fill="#1d4ed8">私有化: 独立 Collection · 物理隔离</text>
+  <text x="675" y="280" text-anchor="middle" font-size="9" fill="#6b7280">数据不出域,安全合规</text>
+
+  <!-- Topic naming -->
+  <rect x="200" y="300" width="560" height="32" rx="5" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+  <text x="480" y="319" text-anchor="middle" font-size="10" fill="#6b7280">Topic 隔离: &lt;tenant_id&gt;.&lt;event_type&gt;.&lt;resource&gt; · Agent事件7天 · 审计事件365天</text>
+
+</svg>

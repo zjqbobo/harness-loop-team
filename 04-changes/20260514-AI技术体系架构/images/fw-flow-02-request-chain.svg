@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400">
+  <defs>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/></marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#16a34a"/></marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#7c3aed"/></marker>
+  </defs>
+  <style>
+    text { font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  </style>
+  <rect width="960" height="400" fill="#ffffff"/>
+  <text x="480" y="24" text-anchor="middle" font-size="14" font-weight="600" fill="#111827">请求链路全景</text>
+
+  <!-- Nodes -->
+  <rect x="20" y="50" width="110" height="40" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="75" y="75" text-anchor="middle" font-size="12" font-weight="600" fill="#1d4ed8">用户请求</text>
+
+  <rect x="170" y="50" width="110" height="40" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+  <text x="225" y="75" text-anchor="middle" font-size="12" font-weight="600" fill="#15803d">API Gateway</text>
+
+  <rect x="320" y="50" width="110" height="40" rx="6" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text x="375" y="75" text-anchor="middle" font-size="12" font-weight="600" fill="#7c3aed">Agent Router</text>
+
+  <!-- Orchestration Engine - center -->
+  <rect x="500" y="40" width="150" height="50" rx="8" fill="#fef2f2" stroke="#fca5a5" stroke-width="2"/>
+  <text x="575" y="72" text-anchor="middle" font-size="12" font-weight="600" fill="#b91c1c">编排引擎</text>
+
+  <!-- Main arrows -->
+  <line x1="130" y1="70" x2="165" y2="70" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <line x1="280" y1="70" x2="315" y2="70" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <line x1="430" y1="70" x2="495" y2="65" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <!-- Branch 1: Skill Executor -->
+  <path d="M 575 90 L 575 140 L 200 140 L 200 165" stroke="#16a34a" stroke-width="1.5" fill="none" marker-end="url(#arrow-green)"/>
+  <rect x="130" y="170" width="140" height="36" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+  <text x="200" y="193" text-anchor="middle" font-size="11" font-weight="600" fill="#15803d">Skill Executor</text>
+
+  <rect x="290" y="170" width="140" height="36" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+  <text x="360" y="193" text-anchor="middle" font-size="11" font-weight="600" fill="#15803d">Tool/Skill Registry</text>
+  <line x1="270" y1="188" x2="285" y2="188" stroke="#16a34a" stroke-width="1.5" marker-end="url(#arrow-green)"/>
+  <text x="205" y="163" text-anchor="middle" font-size="9" fill="#16a34a">skills</text>
+
+  <!-- Branch 2: LLM Call -->
+  <path d="M 650 65 L 690 65 L 690 170 L 620 170" stroke="#7c3aed" stroke-width="1.5" fill="none" marker-end="url(#arrow-purple)"/>
+  <rect x="530" y="170" width="180" height="36" rx="6" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1"/>
+  <text x="620" y="187" text-anchor="middle" font-size="11" font-weight="600" fill="#7c3aed">Model Gateway</text>
+  <text x="620" y="201" text-anchor="middle" font-size="9" fill="#6b7280">Router · Fallback · Rate Limit</text>
+  <text x="700" y="70" text-anchor="middle" font-size="9" fill="#7c3aed">LLM call</text>
+
+  <!-- Branch 3: Memory -->
+  <path d="M 575 90 L 575 240 L 450 240" stroke="#ea580c" stroke-width="1.5" fill="none" marker-end="url(#arrow-green)"/>
+  <!-- Hack: use green for memory read -->
+  <path d="M 575 90 L 575 220" stroke="#ea580c" stroke-width="1.5" fill="none"/>
+  <rect x="310" y="240" width="140" height="36" rx="6" fill="#fff7ed" stroke="#fdba74" stroke-width="1"/>
+  <text x="380" y="263" text-anchor="middle" font-size="11" font-weight="600" fill="#c2410c">Memory Store</text>
+  <text x="420" y="235" text-anchor="middle" font-size="9" fill="#ea580c">recall</text>
+
+  <!-- Sub results -->
+  <rect x="290" y="310" width="140" height="32" rx="6" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+  <text x="360" y="331" text-anchor="middle" font-size="10" fill="#6b7280">Short-term (Redis)</text>
+  <rect x="440" y="310" width="140" height="32" rx="6" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+  <text x="510" y="331" text-anchor="middle" font-size="10" fill="#6b7280">Long-term (Vector DB)</text>
+  <rect x="590" y="310" width="140" height="32" rx="6" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+  <text x="660" y="331" text-anchor="middle" font-size="10" fill="#6b7280">Knowledge Graph</text>
+
+  <!-- Return arrow -->
+  <path d="M 310 188 L 60 188 L 60 300 L 200 300" stroke="#6b7280" stroke-width="1" stroke-dasharray="4,3" fill="none"/>
+
+  <text x="60" y="348" text-anchor="middle" font-size="11" font-weight="600" fill="#111827">Response</text>
+  <rect x="10" y="355" width="100" height="30" rx="6" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+  <text x="60" y="375" text-anchor="middle" font-size="11" fill="#374151">返回用户</text>
+
+  <!-- Legend -->
+  <rect x="20" y="370" width="280" height="22" rx="3" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+  <line x1="30" y1="381" x2="50" y2="381" stroke="#2563eb" stroke-width="1.5"/><text x="55" y="385" font-size="9" fill="#6b7280">主链路</text>
+  <line x1="100" y1="381" x2="120" y2="381" stroke="#16a34a" stroke-width="1.5"/><text x="125" y="385" font-size="9" fill="#6b7280">技能调用</text>
+  <line x1="170" y1="381" x2="190" y2="381" stroke="#7c3aed" stroke-width="1.5"/><text x="195" y="385" font-size="9" fill="#6b7280">模型调用</text>
+  <line x1="240" y1="381" x2="260" y2="381" stroke="#6b7280" stroke-width="1" stroke-dasharray="3,2"/><text x="265" y="385" font-size="9" fill="#6b7280">返回</text>
+
+</svg>

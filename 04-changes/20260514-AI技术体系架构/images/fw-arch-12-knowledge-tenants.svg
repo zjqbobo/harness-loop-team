@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300">
+  <defs>
+    <filter id="shadow" x="-3%" y="-3%" width="108%" height="108%"><feDropShadow dx="1" dy="2" stdDeviation="2" flood-opacity="0.06"/></filter>
+  </defs>
+  <style>text { font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }</style>
+  <rect width="960" height="300" fill="#ffffff"/>
+  <text x="480" y="22" text-anchor="middle" font-size="14" font-weight="600" fill="#111827">行业知识库多租户布局</text>
+
+  <!-- Tenant A: Logistics -->
+  <rect x="20" y="45" width="290" height="230" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="20" y="45" width="290" height="26" rx="8" fill="#2563eb"/>
+  <rect x="20" y="57" width="290" height="14" fill="#2563eb"/>
+  <text x="165" y="64" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">租户 A: 物流行业</text>
+
+  <rect x="35" y="80" width="260" height="24" rx="4" fill="#fff" stroke="#bfdbfe" stroke-width="1"/>
+  <text x="165" y="96" text-anchor="middle" font-size="10" fill="#1d4ed8">SOP 文档 · 运价表</text>
+  <rect x="35" y="110" width="260" height="24" rx="4" fill="#fff" stroke="#bfdbfe" stroke-width="1"/>
+  <text x="165" y="126" text-anchor="middle" font-size="10" fill="#1d4ed8">报关规则 · 路线数据</text>
+  <rect x="35" y="140" width="260" height="24" rx="4" fill="#fff" stroke="#bfdbfe" stroke-width="1"/>
+  <text x="165" y="156" text-anchor="middle" font-size="10" fill="#1d4ed8">承运商合同</text>
+  <rect x="35" y="170" width="260" height="24" rx="4" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1"/>
+  <text x="165" y="186" text-anchor="middle" font-size="9" fill="#15803d">平台预置模板 + 客户私有数据</text>
+  <rect x="35" y="200" width="260" height="55" rx="4" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="45" y="216" font-size="9" font-weight="600" fill="#374151">本体:</text>
+  <text x="45" y="230" font-size="9" fill="#6b7280">订单/运单/仓库/车辆/承运商/路线</text>
+  <text x="45" y="244" font-size="9" fill="#6b7280">术语: FCL/LCL/ETA/ETD/SLA/CY/CFS</text>
+
+  <!-- Tenant B: Finance -->
+  <rect x="335" y="45" width="290" height="230" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="335" y="45" width="290" height="26" rx="8" fill="#16a34a"/>
+  <rect x="335" y="57" width="290" height="14" fill="#16a34a"/>
+  <text x="480" y="64" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">租户 B: 金融行业</text>
+
+  <rect x="350" y="80" width="260" height="24" rx="4" fill="#fff" stroke="#bbf7d0" stroke-width="1"/>
+  <text x="480" y="96" text-anchor="middle" font-size="10" fill="#15803d">监管法规 · 产品说明书</text>
+  <rect x="350" y="110" width="260" height="24" rx="4" fill="#fff" stroke="#bbf7d0" stroke-width="1"/>
+  <text x="480" y="126" text-anchor="middle" font-size="10" fill="#15803d">合规检查清单 · 授信政策</text>
+  <rect x="350" y="140" width="260" height="24" rx="4" fill="#fff" stroke="#bbf7d0" stroke-width="1"/>
+  <text x="480" y="156" text-anchor="middle" font-size="10" fill="#15803d">风控规则</text>
+  <rect x="350" y="170" width="260" height="24" rx="4" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1"/>
+  <text x="480" y="186" text-anchor="middle" font-size="9" fill="#15803d">平台预置模板 + 客户私有数据</text>
+  <rect x="350" y="200" width="260" height="55" rx="4" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="360" y="216" font-size="9" font-weight="600" fill="#374151">本体:</text>
+  <text x="360" y="230" font-size="9" fill="#6b7280">客户/账户/交易/授信/产品/合规规则</text>
+  <text x="360" y="244" font-size="9" fill="#6b7280">术语: KYC/AML/LTV/ROA/PD/LGD</text>
+
+  <!-- Tenant C: Manufacturing -->
+  <rect x="650" y="45" width="290" height="230" rx="8" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="650" y="45" width="290" height="26" rx="8" fill="#7c3aed"/>
+  <rect x="650" y="57" width="290" height="14" fill="#7c3aed"/>
+  <text x="795" y="64" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">租户 C: 制造行业</text>
+
+  <rect x="665" y="80" width="260" height="24" rx="4" fill="#fff" stroke="#d8b4fe" stroke-width="1"/>
+  <text x="795" y="96" text-anchor="middle" font-size="10" fill="#7c3aed">工艺规范 · 设备手册</text>
+  <rect x="665" y="110" width="260" height="24" rx="4" fill="#fff" stroke="#d8b4fe" stroke-width="1"/>
+  <text x="795" y="126" text-anchor="middle" font-size="10" fill="#7c3aed">质检标准 · BOM 清单</text>
+  <rect x="665" y="140" width="260" height="24" rx="4" fill="#fff" stroke="#d8b4fe" stroke-width="1"/>
+  <text x="795" y="156" text-anchor="middle" font-size="10" fill="#7c3aed">连接器: ERP/MES/SCADA</text>
+  <rect x="665" y="170" width="260" height="24" rx="4" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1"/>
+  <text x="795" y="186" text-anchor="middle" font-size="9" fill="#15803d">平台预置模板 + 客户私有数据</text>
+  <rect x="665" y="200" width="260" height="55" rx="4" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="675" y="216" font-size="9" font-weight="600" fill="#374151">本体:</text>
+  <text x="675" y="230" font-size="9" fill="#6b7280">产线/设备/物料/BOM/工序/质检标准</text>
+  <text x="675" y="244" font-size="9" fill="#6b7280">术语: MES/SCADA/OEE/MTBF/CPK</text>
+
+</svg>

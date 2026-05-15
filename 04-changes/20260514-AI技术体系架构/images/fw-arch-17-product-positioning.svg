@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 200">
+  <defs>
+    <filter id="shadow" x="-3%" y="-3%" width="108%" height="108%"><feDropShadow dx="1" dy="2" stdDeviation="3" flood-opacity="0.1"/></filter>
+  </defs>
+  <style>text { font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }</style>
+  <rect width="960" height="200" fill="#ffffff"/>
+  <text x="480" y="24" text-anchor="middle" font-size="14" font-weight="600" fill="#111827">AI Agent 平台 (aPaaS) 产品定位</text>
+
+  <!-- Center box -->
+  <rect x="280" y="45" width="400" height="65" rx="12" fill="#eff6ff" stroke="#3b82f6" stroke-width="2" filter="url(#shadow)"/>
+  <text x="480" y="72" text-anchor="middle" font-size="16" font-weight="600" fill="#1d4ed8">AI Agent Platform</text>
+  <text x="480" y="94" text-anchor="middle" font-size="11" fill="#6b7280">(AI Agent aPaaS — 多行业智能体平台即服务)</text>
+
+  <!-- Left arrow: Industry clients -->
+  <rect x="30" y="55" width="200" height="45" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+  <text x="130" y="73" text-anchor="middle" font-size="11" font-weight="600" fill="#15803d">行业客户</text>
+  <text x="130" y="90" text-anchor="middle" font-size="9" fill="#6b7280">构建/运行/管理 Agent</text>
+  <line x1="230" y1="78" x2="278" y2="78" stroke="#16a34a" stroke-width="1.5" marker-end="url(#arrow-green)"/>
+
+  <!-- Right arrow: ISV partners -->
+  <rect x="730" y="55" width="200" height="45" rx="6" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text x="830" y="73" text-anchor="middle" font-size="11" font-weight="600" fill="#7c3aed">伙伴/ISV</text>
+  <text x="830" y="90" text-anchor="middle" font-size="9" fill="#6b7280">开发行业技能/连接器</text>
+  <line x1="682" y1="78" x2="728" y2="78" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
+
+  <!-- Bottom arrow: Developers -->
+  <rect x="330" y="130" width="300" height="40" rx="6" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
+  <text x="480" y="148" text-anchor="middle" font-size="11" font-weight="600" fill="#c2410c">企业开发者</text>
+  <text x="480" y="163" text-anchor="middle" font-size="9" fill="#6b7280">API/低代码/SDK 接入</text>
+  <line x1="480" y1="110" x2="480" y2="128" stroke="#ea580c" stroke-width="1.5" marker-end="url(#arrow-orange)"/>
+
+</svg>

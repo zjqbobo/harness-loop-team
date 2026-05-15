@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 320">
+  <defs>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/></marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#7c3aed"/></marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#16a34a"/></marker>
+  </defs>
+  <style>text { font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }</style>
+  <rect width="960" height="320" fill="#ffffff"/>
+  <text x="480" y="22" text-anchor="middle" font-size="14" font-weight="600" fill="#111827">Prompt 生命周期 &amp; 语义缓存</text>
+
+  <!-- Left: Prompt Lifecycle -->
+  <text x="280" y="50" text-anchor="middle" font-size="12" font-weight="600" fill="#2563eb">Prompt 生命周期管理</text>
+
+  <rect x="30" y="62" width="110" height="36" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="1"/>
+  <text x="85" y="85" text-anchor="middle" font-size="10" font-weight="600" fill="#1d4ed8">Draft</text>
+  <line x1="140" y1="80" x2="160" y2="80" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <rect x="165" y="62" width="110" height="36" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+  <text x="220" y="85" text-anchor="middle" font-size="10" font-weight="600" fill="#15803d">Review</text>
+  <line x1="275" y1="80" x2="295" y2="80" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <rect x="300" y="62" width="110" height="36" rx="6" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1"/>
+  <text x="355" y="85" text-anchor="middle" font-size="10" font-weight="600" fill="#7c3aed">A/B Test</text>
+  <line x1="410" y1="80" x2="430" y2="80" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <rect x="435" y="62" width="110" height="36" rx="6" fill="#16a34a"/>
+  <text x="490" y="85" text-anchor="middle" font-size="10" font-weight="600" fill="#fff">Published</text>
+  <rect x="435" y="62" width="110" height="36" rx="6" fill="none" stroke="#15803d" stroke-width="1.5"/>
+
+  <!-- Rollback arrow -->
+  <path d="M 490 98 L 490 115 L 220 115 L 220 102" stroke="#dc2626" stroke-width="1" stroke-dasharray="4,3" fill="none" marker-end="url(#arrow-blue)"/>
+  <text x="355" y="113" text-anchor="middle" font-size="8" fill="#dc2626">Rollback</text>
+
+  <!-- Prompt features below -->
+  <rect x="30" y="130" width="515" height="50" rx="6" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="50" y="148" font-size="9" font-weight="600" fill="#374151">特性:</text>
+  <text x="50" y="163" font-size="9" fill="#6b7280">semver 版本管理 · {{variable}} 变量系统 · Base→Industry→Tenant 继承 · 评估闭环 (Score&lt;0.85阻断)</text>
+
+  <!-- Right: Semantic Cache -->
+  <text x="730" y="50" text-anchor="middle" font-size="12" font-weight="600" fill="#7c3aed">语义缓存 (Semantic Cache)</text>
+
+  <rect x="590" y="62" width="280" height="36" rx="6" fill="#7c3aed"/>
+  <text x="730" y="85" text-anchor="middle" font-size="10" font-weight="600" fill="#fff">请求流入</text>
+
+  <line x1="730" y1="98" x2="730" y2="115" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
+
+  <rect x="590" y="118" width="280" height="36" rx="6" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+  <text x="730" y="141" text-anchor="middle" font-size="10" font-weight="600" fill="#374151">精确匹配? → 直接返回 (~5%)</text>
+
+  <line x1="730" y1="154" x2="730" y2="170" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
+
+  <rect x="590" y="173" width="280" height="36" rx="6" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1"/>
+  <text x="730" y="196" text-anchor="middle" font-size="10" font-weight="600" fill="#7c3aed">语义相似度 &gt; 0.95? → 缓存返回</text>
+
+  <line x1="730" y1="209" x2="730" y2="225" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
+
+  <rect x="590" y="228" width="280" height="36" rx="6" fill="#fff7ed" stroke="#fdba74" stroke-width="1"/>
+  <text x="730" y="251" text-anchor="middle" font-size="10" font-weight="600" fill="#c2410c">相似度 &gt; 0.85? → 缓存+差异补充</text>
+
+  <line x1="730" y1="264" x2="730" y2="280" stroke="#16a34a" stroke-width="1.5" marker-end="url(#arrow-green)"/>
+
+  <rect x="590" y="283" width="280" height="30" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+  <text x="730" y="302" text-anchor="middle" font-size="10" font-weight="600" fill="#15803d">调用 LLM + 写入缓存</text>
+
+</svg>

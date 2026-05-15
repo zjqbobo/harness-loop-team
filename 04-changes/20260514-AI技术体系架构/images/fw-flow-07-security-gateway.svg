@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 280">
+  <defs>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/></marker>
+    <marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#dc2626"/></marker>
+  </defs>
+  <style>text { font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }</style>
+  <rect width="960" height="280" fill="#ffffff"/>
+  <text x="480" y="22" text-anchor="middle" font-size="14" font-weight="600" fill="#111827">安全网关链路</text>
+
+  <!-- Flow: Left to Right -->
+  <rect x="15" y="45" width="90" height="36" rx="6" fill="#f9fafb" stroke="#d1d5db" stroke-width="1.5"/>
+  <text x="60" y="68" text-anchor="middle" font-size="11" font-weight="600" fill="#374151">外部请求</text>
+
+  <line x1="105" y1="63" x2="130" y2="63" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <rect x="135" y="45" width="90" height="36" rx="6" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="180" y="62" text-anchor="middle" font-size="10" font-weight="600" fill="#b91c1c">WAF</text>
+  <text x="180" y="75" text-anchor="middle" font-size="8" fill="#6b7280">Web防护</text>
+
+  <line x1="225" y1="63" x2="250" y2="63" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <rect x="255" y="45" width="90" height="36" rx="6" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
+  <text x="300" y="62" text-anchor="middle" font-size="10" font-weight="600" fill="#c2410c">DDoS 防护</text>
+  <text x="300" y="75" text-anchor="middle" font-size="8" fill="#6b7280">流量清洗</text>
+
+  <line x1="345" y1="63" x2="370" y2="63" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <rect x="375" y="45" width="110" height="36" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="430" y="62" text-anchor="middle" font-size="10" font-weight="600" fill="#1d4ed8">API Gateway</text>
+  <text x="430" y="75" text-anchor="middle" font-size="8" fill="#6b7280">TLS 终结 · 限流</text>
+
+  <line x1="485" y1="63" x2="510" y2="63" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <rect x="515" y="45" width="110" height="36" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+  <text x="570" y="62" text-anchor="middle" font-size="10" font-weight="600" fill="#15803d">身份认证</text>
+  <text x="570" y="75" text-anchor="middle" font-size="8" fill="#6b7280">OIDC/OAuth SSO</text>
+
+  <line x1="625" y1="63" x2="650" y2="63" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <rect x="655" y="45" width="110" height="36" rx="6" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text x="710" y="62" text-anchor="middle" font-size="10" font-weight="600" fill="#7c3aed">权限校验</text>
+  <text x="710" y="75" text-anchor="middle" font-size="8" fill="#6b7280">RBAC+ABAC</text>
+
+  <line x1="765" y1="63" x2="790" y2="63" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <rect x="795" y="45" width="110" height="36" rx="6" fill="#fef2f2" stroke="#fecaca" stroke-width="1.5"/>
+  <text x="850" y="62" text-anchor="middle" font-size="10" font-weight="600" fill="#b91c1c">数据脱敏</text>
+  <text x="850" y="75" text-anchor="middle" font-size="8" fill="#6b7280">PII Masking</text>
+
+  <!-- Second row: additional checks -->
+  <path d="M 850 63 L 880 63 L 880 120 L 800 120" stroke="#dc2626" stroke-width="1" stroke-dasharray="4,3" fill="none" marker-end="url(#arrow-red)"/>
+
+  <rect x="660" y="120" width="140" height="36" rx="6" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
+  <text x="730" y="137" text-anchor="middle" font-size="10" font-weight="600" fill="#c2410c">内容安全</text>
+  <text x="730" y="150" text-anchor="middle" font-size="8" fill="#6b7280">LLM Firewall</text>
+
+  <!-- Security layers legend -->
+  <text x="480" y="185" text-anchor="middle" font-size="11" font-weight="600" fill="#374151">安全防护层次</text>
+
+  <rect x="30" y="198" width="170" height="30" rx="5" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+  <text x="115" y="218" text-anchor="middle" font-size="10" fill="#374151">L1: 基础设施安全</text>
+  <rect x="210" y="198" width="170" height="30" rx="5" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+  <text x="295" y="218" text-anchor="middle" font-size="10" fill="#374151">L2: 网络安全</text>
+  <rect x="390" y="198" width="170" height="30" rx="5" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1"/>
+  <text x="475" y="218" text-anchor="middle" font-size="10" font-weight="600" fill="#1d4ed8">L3: 应用安全</text>
+  <rect x="570" y="198" width="170" height="30" rx="5" fill="#fef2f2" stroke="#fecaca" stroke-width="1"/>
+  <text x="655" y="218" text-anchor="middle" font-size="10" font-weight="600" fill="#b91c1c">L4: AI 安全</text>
+  <rect x="750" y="198" width="180" height="30" rx="5" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1"/>
+  <text x="840" y="218" text-anchor="middle" font-size="10" fill="#374151">L5: 数据安全</text>
+
+  <text x="480" y="260" text-anchor="middle" font-size="9" fill="#6b7280">TLS 1.3 · AES-256 · KMS 密钥管理 · Prompt Injection 检测 · Jailbreak 防御 · 幻觉检测</text>
+
+</svg>

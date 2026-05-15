@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 200">
+  <defs>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/></marker>
+    <marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#dc2626"/></marker>
+  </defs>
+  <style>text { font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }</style>
+  <rect width="960" height="200" fill="#ffffff"/>
+  <text x="480" y="20" text-anchor="middle" font-size="13" font-weight="600" fill="#111827">模型网关 Fallback 链</text>
+
+  <rect x="20" y="45" width="130" height="40" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+  <text x="85" y="70" text-anchor="middle" font-size="10" font-weight="600" fill="#15803d">主模型调用</text>
+  <text x="88" y="38" text-anchor="middle" font-size="8" fill="#6b7280">Step 1</text>
+
+  <line x1="150" y1="65" x2="180" y2="65" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <rect x="185" y="45" width="140" height="40" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="255" y="70" text-anchor="middle" font-size="10" font-weight="600" fill="#1d4ed8">同供应商重试</text>
+  <text x="258" y="38" text-anchor="middle" font-size="8" fill="#6b7280">Step 2 (×1, backoff 1s)</text>
+
+  <line x1="325" y1="65" x2="355" y2="65" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <rect x="360" y="45" width="140" height="40" rx="6" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="430" y="70" text-anchor="middle" font-size="10" font-weight="600" fill="#b91c1c">备选模型切换</text>
+  <text x="433" y="38" text-anchor="middle" font-size="8" fill="#6b7280">Step 3 (Claude→DeepSeek)</text>
+
+  <line x1="500" y1="65" x2="530" y2="65" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <rect x="535" y="45" width="150" height="40" rx="6" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
+  <text x="610" y="70" text-anchor="middle" font-size="10" font-weight="600" fill="#c2410c">降级模型</text>
+  <text x="613" y="38" text-anchor="middle" font-size="8" fill="#6b7280">Step 4 (轻量+degraded)</text>
+
+  <line x1="685" y1="65" x2="715" y2="65" stroke="#dc2626" stroke-width="1.5" marker-end="url(#arrow-red)"/>
+
+  <rect x="720" y="45" width="180" height="40" rx="6" fill="#f9fafb" stroke="#d1d5db" stroke-width="1.5"/>
+  <text x="810" y="70" text-anchor="middle" font-size="10" font-weight="600" fill="#374151">友好错误 + 告警</text>
+  <text x="813" y="38" text-anchor="middle" font-size="8" fill="#6b7280">Step 5 (兜底)</text>
+
+  <!-- Failure labels -->
+  <text x="168" y="102" text-anchor="middle" font-size="8" fill="#dc2626">超时/限流/错误</text>
+  <text x="343" y="102" text-anchor="middle" font-size="8" fill="#dc2626">重试失败</text>
+  <text x="518" y="102" text-anchor="middle" font-size="8" fill="#dc2626">切换失败</text>
+  <text x="703" y="102" text-anchor="middle" font-size="8" fill="#dc2626">降级失败</text>
+
+  <!-- Route strategy matrix -->
+  <text x="480" y="135" text-anchor="middle" font-size="11" font-weight="600" fill="#374151">路由策略矩阵 (智能路由)</text>
+  <rect x="80" y="148" width="800" height="40" rx="5" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="110" y="165" font-size="9" fill="#6b7280">简单对话→DeepSeek</text>
+  <text x="310" y="165" font-size="9" fill="#6b7280">复杂推理→Claude</text>
+  <text x="510" y="165" font-size="9" fill="#6b7280">代码生成→Claude/DeepSeek</text>
+  <text x="710" y="165" font-size="9" fill="#6b7280">合规场景→私有模型</text>
+  <text x="110" y="182" font-size="9" fill="#6b7280">成本优先→DeepSeek</text>
+  <text x="310" y="182" font-size="9" fill="#6b7280">质量优先→Claude</text>
+  <text x="510" y="182" font-size="9" fill="#6b7280">嵌入向量→本地模型</text>
+
+</svg>
