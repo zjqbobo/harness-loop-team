@@ -1,6 +1,6 @@
 # 自动化测试规范
 
-> 📌 范围: 后端单元测试 + 端到端 (E2E) 测试
+> 📌 范围: 后端单元测试 + 端到端 (E2E) 测试 + 测试文档沉淀
 > 📌 门禁: Gateway 3 — coverage ≥ 80% statement, ≥ 70% branch
 
 ---
@@ -94,12 +94,76 @@ python ~/.claude/skills/webapp-testing/scripts/with_server.py \
 
 ---
 
-## 3️⃣ 链式移交规则
+## 3️⃣ 测试文档规范
+
+### 测试用例文档
+
+- 模板路径: 按三层覆盖规则查找 `09-templates/测试用例文档模板.md`
+  - `<project>/.harness/09-templates/测试用例文档模板.md` (项目覆盖)
+  - `~/.claude/harness.local/09-templates/测试用例文档模板.md` (公司覆盖)
+  - `~/.claude/harness/09-templates/测试用例文档模板.md` (默认兜底)
+- 组织方式: 按需求/功能维度，每个需求下按场景分组
+- 用例要素: ID、标题、优先级(P0/P1/P2)、前置条件、操作步骤、预期结果
+- 产出流程: Read 模板 → 生成 MD → 用户审阅 → 可选转 DOCX
+
+### 测试报告文档
+
+- 模板路径: 按三层覆盖规则查找 `09-templates/测试报告文档模板.md`
+  - `<project>/.harness/09-templates/测试报告文档模板.md` (项目覆盖)
+  - `~/.claude/harness.local/09-templates/测试报告文档模板.md` (公司覆盖)
+  - `~/.claude/harness/09-templates/测试报告文档模板.md` (默认兜底)
+- 核心内容: 执行概况、按需求维度的执行明细、缺陷清单、风险与遗留问题、测试结论
+- 产出流程: Read 模板 → 生成 MD → 用户审阅 → 可选转 DOCX
+
+---
+
+## 4️⃣ 流水线状态管理
+
+### 状态文件
+
+每个变更目录下维护 `pipeline-state.json`，追踪完整的流水线阶段。详细 Schema 按路径解析规则查找 `docs/pipeline-state-schema.md`。
+
+### 状态文件路径
+
+```
+04-changes/{YYYYMMDD-需求名}/pipeline-state.json
+```
+
+### 写入规则
+
+| 阶段 | 写入方 | 写入时机 |
+|------|--------|---------|
+| `02-implementation-complete` | harness-implementation | 编码完成、测试用例文档决策点后 |
+| `04-testing-complete` | harness-testing | 测试执行完毕、测试报告决策点后 |
+| `03-code-review-complete` | harness-code-review | 审查完成 |
+
+### 读取规则
+
+- harness-testing 启动时：读取 pipeline-state.json，确认 `current_stage == "02-implementation-complete"`
+- harness-entry 启动时：扫描 `04-changes/` 下是否有未关闭的变更（`current_stage != "09-closed"`），提示用户恢复
+
+---
+
+## 5️⃣ 链式移交规则
 
 ```
 harness-implementation 编码完成
     ↓
+    ❶ 写入 pipeline-state.json (stage=02-implementation-complete)
+    ↓
+    ❷ 是否生成测试用例文档?
+    ├─ 是 → Read模板 → 生成MD → 用户审阅 → 可选转DOCX
+    └─ 否 → 跳过
+    ↓
+    ❸ invoke harness-testing（禁止跳过）
+    ↓
 harness-testing 执行测试
+    ↓
+    ❹ 写入 pipeline-state.json (stage=04-testing-complete)
+    ↓
+    ❺ 是否生成测试报告?
+    ├─ 是 → Read模板 → 生成MD → 用户审阅 → 可选转DOCX
+    └─ 否 → 跳过
     ↓
   ├─ 全部通过 → harness-code-review
   ├─ 失败(代码bug) → 返回 harness-implementation 修复
