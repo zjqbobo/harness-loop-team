@@ -104,11 +104,16 @@ echo ""
 
 # 推荐依赖
 echo -e "   ${YELLOW}[推荐] E2E 测试${NC}"
-echo -e "   ℹ️  Playwright 检测方式: npx playwright --version"
-if npx playwright --version &>/dev/null 2>&1; then
-    echo -e "   ${GREEN}✅${NC} Playwright: $(npx playwright --version 2>/dev/null)"
+echo -e "   ℹ️  Playwright 检测方式: 检查浏览器二进制 + npm list"
+if [ -d "${HOME}/Library/Caches/ms-playwright" ] || [ -d "${HOME}/.cache/ms-playwright" ]; then
+    echo -e "   ${GREEN}✅${NC} Playwright 浏览器: 已安装"
+    installed_browsers=$(ls ~/Library/Caches/ms-playwright/ 2>/dev/null | tr '\n' ' ' || ls ~/.cache/ms-playwright/ 2>/dev/null | tr '\n' ' ')
+    echo -e "   ℹ️  浏览器: ${installed_browsers}"
+elif npm list -g playwright --depth=0 2>/dev/null | grep -q playwright; then
+    echo -e "   ${YELLOW}⚠${NC}  Playwright 已安装但浏览器未安装 → npx playwright install chromium"
+    missing_recommended=$((missing_recommended + 1))
 else
-    echo -e "   ${RED}❌${NC} Playwright: 未安装  →  npx playwright install chromium"
+    echo -e "   ${RED}❌${NC} Playwright: 未安装  →  npm install -g playwright && npx playwright install chromium"
     missing_recommended=$((missing_recommended + 1))
 fi
 
@@ -190,7 +195,55 @@ fi
 ln -sf "${CLAUDE_MD_SRC}" "${CLAUDE_MD_DST}"
 echo -e "   ${GREEN}✅${NC} CLAUDE.md → ${CLAUDE_MD_SRC}"
 
-# ── 3. 验证 ──────────────────────────────────────
+# ── 3. 安装 ACM Agent ──────────────────────────────────────
+
+echo ""
+echo -e "${CYAN}📊 安装 ACM Agent (AI 编程效能指标采集)...${NC}"
+
+ACM_DIR="${HARNESS_DIR}/scripts/acm"
+ACM_HOOK_SRC="${ACM_DIR}/hooks/post-commit"
+ACM_PENDING_DIR="${HOME}/.acm/pending"
+ACM_BLAME_DIR="${HOME}/.acm/blame"
+
+if [ -f "${ACM_HOOK_SRC}" ]; then
+    echo -e "   ${GREEN}✅${NC} ACM hook 源文件: ${ACM_HOOK_SRC}"
+else
+    echo -e "   ${RED}❌${NC} ACM hook 源文件缺失: ${ACM_HOOK_SRC}"
+fi
+
+# 安装 Python agent
+echo -e "   ${CYAN}🐍 安装 ACM Python 包...${NC}"
+cd "${ACM_DIR}" && pip3 install -e "." --quiet 2>&1 | tail -1 || echo -e "   ${YELLOW}⚠${NC}  Python 包安装失败（可后续手动: pip3 install -e ${ACM_DIR}）"
+
+# 创建本地数据目录
+mkdir -p "${ACM_PENDING_DIR}"
+mkdir -p "${ACM_BLAME_DIR}"
+echo -e "   ${GREEN}✅${NC} 数据目录: ~/.acm/"
+
+# 创建全局 hook 安装命令
+ACM_HOOK_INSTALL_CMD="cp ${ACM_HOOK_SRC} .git/hooks/post-commit && chmod +x .git/hooks/post-commit"
+echo -e "   ${GREEN}✅${NC} ACM Agent 安装完成"
+echo -e "   ℹ️  在仓库中执行以下命令启用 AI 指标采集:"
+echo -e "   ${YELLOW}     ${ACM_HOOK_INSTALL_CMD}${NC}"
+
+# ── 4. 创建公司级覆盖目录 ──────────────────────────────────────
+
+OVERLAY_DIR="${HOME}/.claude/harness.local"
+echo ""
+echo -e "${CYAN}📁 创建公司级覆盖目录...${NC}"
+
+mkdir -p "${OVERLAY_DIR}/09-templates"
+mkdir -p "${OVERLAY_DIR}/docs"
+mkdir -p "${OVERLAY_DIR}/01-rules"
+mkdir -p "${OVERLAY_DIR}/scripts"
+
+echo -e "   ${GREEN}✅${NC} ${OVERLAY_DIR}/09-templates/  — 放入你的自定义文档模板"
+echo -e "   ${GREEN}✅${NC} ${OVERLAY_DIR}/docs/          — 放入你的业务知识库"
+echo -e "   ${GREEN}✅${NC} ${OVERLAY_DIR}/01-rules/       — 覆盖/补充编码规范"
+echo -e "   ${GREEN}✅${NC} ${OVERLAY_DIR}/scripts/        — 覆盖/补充工具脚本"
+echo -e "   ℹ️  此目录与 harness 默认隔离，git pull 更新不冲突"
+
+# ── 5. 验证 ──────────────────────────────────────
 
 echo ""
 echo -e "${CYAN}🔍 验证安装...${NC}"
@@ -220,14 +273,30 @@ else
     echo -e "   ${RED}❌${NC} 文档模板不存在"
 fi
 
-# 验证脚本
-if [ -f "${HARNESS_DIR}/scripts/doc/md2docx.sh" ]; then
-    echo -e "   ${GREEN}✅${NC} 工具脚本"
+# 验证脚本（主入口 + 核心渲染）
+if [ -f "${HARNESS_DIR}/scripts/doc/doc-pipeline.sh" ] && [ -f "${HARNESS_DIR}/scripts/doc/render-diagrams.sh" ]; then
+    echo -e "   ${GREEN}✅${NC} 工具脚本（doc-pipeline + render-diagrams 等）"
+elif [ -f "${HARNESS_DIR}/scripts/doc/md2docx.sh" ]; then
+    echo -e "   ${GREEN}✅${NC} 工具脚本（基础）"
 else
     echo -e "   ${RED}❌${NC} 工具脚本不存在"
 fi
 
-# ── 4. 完成 ──────────────────────────────────────
+# 验证知识索引
+if [ -f "${HARNESS_DIR}/00-harness-core/knowledge-index.yaml" ]; then
+    echo -e "   ${GREEN}✅${NC} 知识索引"
+else
+    echo -e "   ${YELLOW}⚠${NC}  知识索引（knowledge-index.yaml）不存在"
+fi
+
+# 验证 ACM
+if [ -f "${HARNESS_DIR}/scripts/acm/hooks/post-commit" ]; then
+    echo -e "   ${GREEN}✅${NC} ACM Agent (AI 指标采集)"
+else
+    echo -e "   ${YELLOW}⚠${NC}  ACM Agent 缺失"
+fi
+
+# ── 6. 完成 ──────────────────────────────────────
 
 echo ""
 echo -e "${GREEN}╔══════════════════════════════════════════╗${NC}"
@@ -241,8 +310,15 @@ echo -e "${GREEN}║  • \"帮我修bug...\" → 系统调试               ║
 echo -e "${GREEN}║  • \"帮我review...\" → 代码审查              ║${NC}"
 echo -e "${GREEN}║  • \"帮我实现...\" → TDD + 编码规范          ║${NC}"
 echo -e "${GREEN}║  • \"帮我写测试...\" → 单测 + E2E             ║${NC}"
+echo -e "${GREEN}║  • \"帮我做下压测...\" → 压力测试+性能报告    ║${NC}"
+echo -e "${GREEN}║                                           ║${NC}"
+echo -e "${GREEN}║  📊 ACM Agent 已安装                       ║${NC}"
+echo -e "${GREEN}║  启用 AI 指标采集:                          ║${NC}"
+echo -e "${GREEN}║  cp ~/.claude/harness/scripts/acm/hooks/   ║${NC}"
+echo -e "${GREEN}║     post-commit .git/hooks/                ║${NC}"
 echo -e "${GREEN}║                                           ║${NC}"
 echo -e "${GREEN}║  更新: cd ~/.claude/harness && git pull    ║${NC}"
+echo -e "${GREEN}║  定制: ~/.claude/harness.local/ 覆盖模板/知识库 ║${NC}"
 echo -e "${GREEN}║  卸载: rm ~/.claude/skills/harness-*       ║${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════════╝${NC}"
 echo ""

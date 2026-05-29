@@ -1,0 +1,22 @@
+[project]
+name = "acm"
+version = "0.1.0"
+description = "AI Coding Metrics — AI 编程效能指标采集工具"
+requires-python = ">=3.8"
+dependencies = [
+    "requests>=2.28.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+
+[project.scripts]
+acm-agent = "acm.__main__:main"
+acm-blame = "acm.collector.blame:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

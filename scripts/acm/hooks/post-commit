@@ -1,0 +1,397 @@
+#!/bin/bash
+# ACM post-commit hook - commit metadata + incremental blame + Phase 3 session diff
+# Install: .git/hooks/post-commit
+# Perf: Step 1 sync < 200ms, Step 2 async background
+
+set -euo pipefail
+
+REPO_PATH=$(git rev-parse --show-toplevel)
+COMMIT_HASH=$(git rev-parse HEAD)
+AUTHOR_EMAIL=$(git log -1 --format='%ae')
+COMMIT_TIME=$(git log -1 --format='%aI')
+COMMIT_BODY=$(git log -1 --format='%b')
+
+# ============================================================
+# AI detection: Co-Authored-By first, then session log fallback
+# ============================================================
+AI_INVOLVED=false
+AI_TOOLS="[]"
+
+if echo "$COMMIT_BODY" | grep -qi "Co-Authored-By.*Claude"; then
+    AI_INVOLVED=true
+    AI_TOOLS='["claude-code"]'
+elif echo "$COMMIT_BODY" | grep -qi "Co-Authored-By.*Copilot"; then
+    AI_INVOLVED=true
+    AI_TOOLS='["copilot"]'
+fi
+
+# Session log fallback for Nimbalyst (no Co-Authored-By)
+if [ "$AI_INVOLVED" = false ] && [ -d "$HOME/.claude/projects" ]; then
+    ACM_CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | tr '\n' ' ')
+    ACM_CHANGED_FILES="$ACM_CHANGED_FILES" ACM_REPO="$REPO_PATH" python3 -c "
+import json, os, re
+from datetime import datetime, timezone
+from pathlib import Path
+
+cutoff = datetime.now(timezone.utc).timestamp() - 300
+projects_dir = Path.home() / '.claude' / 'projects'
+repo_path = os.environ.get('ACM_REPO', '')
+commit_files = set(os.environ.get('ACM_CHANGED_FILES', '').split())
+ai = False
+
+try:
+    all_sessions = []
+    for proj_dir in projects_dir.iterdir():
+        if not proj_dir.is_dir(): continue
+        for sf in proj_dir.glob('*.jsonl'):
+            try:
+                all_sessions.append((sf.stat().st_mtime, sf))
+            except Exception:
+                continue
+    all_sessions.sort(reverse=True)
+
+    for mtime, session_file in all_sessions:
+        if mtime < cutoff:
+            break
+        try:
+            with open(session_file) as f:
+                f.seek(0, 2)
+                tail_size = min(f.tell(), 8192)
+                if tail_size < 100:
+                    continue
+                f.seek(f.tell() - tail_size)
+                tail = f.read()
+                if not (('\"type\": \"tool_use\"' in tail or '\"type\":\"tool_use\"' in tail) and ('Edit' in tail or 'Write' in tail)):
+                    continue
+                m = re.search(r'\"file_path\":\s*\"([^\"]+)\"', tail)
+                if m:
+                    edited = m.group(1)
+                    for cf in commit_files:
+                        if cf and (cf in edited or edited.endswith(cf)):
+                            ai = True
+                            break
+        except Exception:
+            continue
+        if ai:
+            break
+except Exception:
+    pass
+
+print('[\"claude-code\"]' if ai else '[]')
+"
+    if [ "$AI_TOOLS" != "[]" ]; then
+        AI_INVOLVED=true
+    fi
+fi
+
+# ============================================================
+# Line stats from numstat
+# ============================================================
+LINES_ADDED=0
+LINES_DELETED=0
+NUMSTAT=$(git diff --numstat HEAD~1 HEAD 2>/dev/null || true)
+if [ -n "$NUMSTAT" ]; then
+    LINES_ADDED=$(echo "$NUMSTAT" | awk '{s+=$1} END {print s+0}')
+    LINES_DELETED=$(echo "$NUMSTAT" | awk '{s+=$2} END {print s+0}')
+fi
+
+# ============================================================
+# Step 1: Write commit metadata (sync, < 200ms)
+# ============================================================
+ACM_HASH="$COMMIT_HASH" \
+ACM_EMAIL="$AUTHOR_EMAIL" \
+ACM_TIME="$COMMIT_TIME" \
+ACM_AI=$( [ "$AI_INVOLVED" = true ] && echo 1 || echo 0 ) \
+ACM_TOOLS="$AI_TOOLS" \
+ACM_ADDED="$LINES_ADDED" \
+ACM_DELETED="$LINES_DELETED" \
+python3 -c "
+import json, os
+from datetime import datetime
+from pathlib import Path
+
+base = Path(os.path.expanduser('~/.acm'))
+pending = base / 'pending'
+pending.mkdir(parents=True, exist_ok=True)
+
+hash_val = os.environ['ACM_HASH']
+target = pending / f'{hash_val}.json'
+
+if target.exists():
+    exit(0)
+
+record = {
+    'commit_hash': hash_val,
+    'author_email': os.environ['ACM_EMAIL'],
+    'commit_time': os.environ['ACM_TIME'],
+    'ai_involved': int(os.environ['ACM_AI']),
+    'ai_tools': os.environ['ACM_TOOLS'],
+    'lines_added': int(os.environ.get('ACM_ADDED', '0')),
+    'lines_deleted': int(os.environ.get('ACM_DELETED', '0')),
+    'edits_total': 0,
+    'edits_accepted': 0,
+    'created_at': datetime.utcnow().isoformat(),
+}
+
+tmp = target.with_suffix('.tmp')
+tmp.write_text(json.dumps(record, ensure_ascii=False))
+tmp.rename(target)
+
+if os.environ['ACM_AI'] == '1':
+    ai_cache = base / 'ai_hashes_cache'
+    with open(ai_cache, 'a') as f:
+        f.write(os.environ['ACM_HASH'] + '\n')
+"
+
+# ============================================================
+# Step 2: Async incremental blame + Phase 3 session diff
+# AI commit: session diff splits AI/human added lines
+# Human commit: all lines counted as human
+# ============================================================
+(
+    cd "$REPO_PATH"
+
+    AI_CACHE="$HOME/.acm/ai_hashes_cache"
+    CURRENT_HASH=$(git rev-parse HEAD)
+    IS_AI=false
+    if [ -f "$AI_CACHE" ] && grep -q "$CURRENT_HASH" "$AI_CACHE" 2>/dev/null; then
+        IS_AI=true
+    fi
+
+    CHANGED=$(git diff --numstat HEAD~1 HEAD 2>/dev/null || true)
+    if [ -z "$CHANGED" ]; then
+        exit 0
+    fi
+
+    if [ "$IS_AI" = true ] && [ -d "$HOME/.claude/projects" ]; then
+        CHANGED_FILES=$(echo "$CHANGED" | awk -F'\t' '{print $3}' | tr '\n' ' ')
+        ACM_CURRENT_HASH="$CURRENT_HASH" \
+        ACM_NUMSTAT="$CHANGED" \
+        ACM_REPO="$REPO_PATH" \
+        ACM_CHANGED_FILES="$CHANGED_FILES" \
+        python3 -c "
+import json, os, subprocess
+from pathlib import Path
+from datetime import datetime, timezone
+
+commit_hash = os.environ['ACM_CURRENT_HASH']
+repo_path = os.environ['ACM_REPO']
+changed_files = set(f for f in os.environ.get('ACM_CHANGED_FILES', '').split() if f)
+blame_dir = Path.home() / '.acm' / 'blame'
+blame_dir.mkdir(parents=True, exist_ok=True)
+
+# Step 2a: Extract AI edits from session JSONL
+# Scan all projects — file_path matching by absolute path ensures correct repo
+ai_fp_edits = {}
+projects_dir = Path.home() / '.claude' / 'projects'
+cutoff = datetime.now(timezone.utc).timestamp() - 300
+
+all_sessions = []
+for proj_dir in projects_dir.iterdir():
+    if not proj_dir.is_dir():
+        continue
+    for sf in proj_dir.glob('*.jsonl'):
+        try:
+            all_sessions.append((sf.stat().st_mtime, sf))
+        except Exception:
+            continue
+all_sessions.sort(reverse=True)
+
+for mtime, sf in all_sessions:
+    if mtime < cutoff:
+        break
+    try:
+        with open(sf) as f:
+            for line in f:
+                try:
+                    event = json.loads(line)
+                except Exception:
+                    continue
+                msg = event.get('message')
+                if not msg or msg.get('role') != 'assistant':
+                    continue
+                for item in msg.get('content', []):
+                    inp = item.get('input', {})
+                    fp = inp.get('file_path', '')
+                    matched = None
+                    for cf in changed_files:
+                        if cf and (cf in fp or fp.endswith(cf) or fp.endswith('/' + cf)):
+                            matched = cf
+                            break
+                    if not matched:
+                        continue
+                    if 'old_string' in inp:
+                        ai_fp_edits.setdefault(matched, []).append({
+                            'old': inp['old_string'],
+                            'new': inp['new_string'],
+                        })
+                    elif 'content' in inp:
+                        ai_fp_edits.setdefault(matched, []).append({
+                            'old': '',
+                            'new': inp['content'],
+                        })
+    except Exception:
+        continue
+
+# Step 2b: Per-file line-level AI/human split
+total_added = 0
+ai_added = 0
+total_deleted = 0
+records = []
+
+for numstat_line in os.environ['ACM_NUMSTAT'].splitlines():
+    parts = numstat_line.split('\t')
+    if len(parts) < 3:
+        continue
+    added = 0 if parts[0] == '-' else int(parts[0])
+    deleted = 0 if parts[1] == '-' else int(parts[1])
+    filepath = parts[2]
+    total_added += added
+    total_deleted += deleted
+
+    ai_file_added = 0
+    # filepath from numstat is relative, ai_fp_edits keys are full paths -> fuzzy match
+    edits = []
+    for fp_key, fp_edits in ai_fp_edits.items():
+        if filepath and (filepath in fp_key or fp_key.endswith(filepath) or fp_key.endswith('/' + filepath)):
+            edits = fp_edits
+            break
+
+    if added > 0 and edits:
+        # Get old/new file content
+        try:
+            old_content = subprocess.run(
+                ['git', 'show', f'HEAD~1:{filepath}'],
+                cwd=repo_path, capture_output=True, text=True,
+            ).stdout
+        except Exception:
+            old_content = ''
+        try:
+            new_content = subprocess.run(
+                ['git', 'show', f'HEAD:{filepath}'],
+                cwd=repo_path, capture_output=True, text=True,
+            ).stdout
+        except Exception:
+            new_content = ''
+
+        # Reconstruct AI-only version
+        ai_result = old_content
+        for edit in edits:
+            o, n = edit['old'], edit['new']
+            if o:
+                idx = ai_result.find(o)
+                if idx >= 0:
+                    ai_result = ai_result[:idx] + n + ai_result[idx + len(o):]
+            else:
+                ai_result = n
+
+        # Line-by-line: new lines not in old, that exist in ai_only = AI lines
+        old_line_set = set(old_content.splitlines())
+        ai_line_set = set(ai_result.splitlines())
+        for new_line in new_content.splitlines():
+            if new_line not in old_line_set:
+                if new_line in ai_line_set:
+                    ai_file_added += 1
+
+        ai_file_added = min(ai_file_added, added)
+    elif added > 0 and not ai_fp_edits:
+        ai_file_added = added
+
+    ai_added += ai_file_added
+    records.append({
+        'file_path': filepath,
+        'lines_added': added,
+        'lines_deleted': deleted,
+        'ai_lines_added': ai_file_added,
+    })
+
+data = {
+    'snapshot_type': 'incremental',
+    'phase': 'phase3',
+    'commit_hash': commit_hash,
+    'ai_involved': True,
+    'total_lines_added': total_added,
+    'ai_lines_added': ai_added,
+    'total_lines_deleted': total_deleted,
+    'file_records': records,
+}
+(blame_dir / f'{commit_hash}.json').write_text(json.dumps(data, ensure_ascii=False))
+
+# Write adoption stats back to the pending record
+total_edits = sum(len(v) for v in ai_fp_edits.values())
+matched_edits = 0
+for fp, edits in ai_fp_edits.items():
+    try:
+        old_content = subprocess.run(
+            ['git', 'show', f'HEAD~1:{fp}'],
+            cwd=repo_path, capture_output=True, text=True,
+        ).stdout
+    except Exception:
+        old_content = ''
+    try:
+        new_content = subprocess.run(
+            ['git', 'show', f'HEAD:{fp}'],
+            cwd=repo_path, capture_output=True, text=True,
+        ).stdout
+    except Exception:
+        new_content = ''
+    # For each file, take the LAST Edit/Write as the final AI output
+    # Check if that final output appears in the committed file
+    for edit in edits:
+        new_text = edit.get('new', '') or edit.get('content', '')
+        if new_text and new_content and new_text in new_content:
+            matched_edits += 1
+pending_dir = Path.home() / '.acm' / 'pending'
+pending_file = pending_dir / f'{commit_hash}.json'
+if pending_file.exists():
+    rec = json.loads(pending_file.read_text())
+    rec['edits_total'] = total_edits
+    rec['edits_accepted'] = matched_edits
+    pending_file.write_text(json.dumps(rec, ensure_ascii=False))
+"
+    else
+        ACM_CURRENT_HASH="$CURRENT_HASH" \
+        ACM_NUMSTAT="$CHANGED" \
+        python3 -c "
+import json, os
+from pathlib import Path
+
+commit_hash = os.environ['ACM_CURRENT_HASH']
+total_added = 0
+total_deleted = 0
+records = []
+
+for line in os.environ['ACM_NUMSTAT'].splitlines():
+    parts = line.split('\t')
+    if len(parts) < 3:
+        continue
+    added = 0 if parts[0] == '-' else int(parts[0])
+    deleted = 0 if parts[1] == '-' else int(parts[1])
+    filepath = parts[2]
+    total_added += added
+    total_deleted += deleted
+    records.append({
+        'file_path': filepath,
+        'lines_added': added,
+        'lines_deleted': deleted,
+        'ai_lines_added': 0,
+    })
+
+data = {
+    'snapshot_type': 'incremental',
+    'commit_hash': commit_hash,
+    'ai_involved': False,
+    'total_lines_added': total_added,
+    'ai_lines_added': 0,
+    'total_lines_deleted': total_deleted,
+    'file_records': records,
+}
+
+blame_dir = Path.home() / '.acm' / 'blame'
+blame_dir.mkdir(parents=True, exist_ok=True)
+(blame_dir / f'{commit_hash}.json').write_text(json.dumps(data, ensure_ascii=False))
+"
+    fi
+) &
+
+# Manual human addition line
