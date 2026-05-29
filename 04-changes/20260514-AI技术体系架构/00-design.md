@@ -681,4 +681,1254 @@ Phase 4: 智能化 (24-36月)
 
 ---
 
-*文档结束。下一步：用户审阅 → 移交实施计划。*
+## 10. 从零搭建路线图
+
+### 10.1 搭建总览
+
+```
+Phase 1 (Week 1-2)          Phase 2 (Week 3-4)         Phase 3 (Week 5-8)
+┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
+│ 基础设施层        │ →  │ AI 能力层         │ →  │ Agent 平台层      │
+│ K8s + GPU + DB   │    │ 模型网关 + RAG    │    │ Agent引擎 + 技能  │
+│ + 消息队列 + 存储 │    │ + Prompt Hub     │    │ + 记忆 + 评估     │
+└──────────────────┘    └──────────────────┘    └──────────────────┘
+                                                          │
+Phase 5 (Week 11-12)        Phase 4 (Week 9-10)           │
+┌──────────────────┐    ┌──────────────────┐              │
+│ 上线验证 + 压测   │ ←  │ 行业方案接入      │ ←──────────┘
+│ + 监控 + 灰度发布 │    │ 物流Agent部署     │
+└──────────────────┘    └──────────────────┘
+```
+
+### 10.2 Phase 1：基础设施层搭建（Week 1-2）
+
+#### 10.2.1 K8s 集群准备
+
+```bash
+# 方案 A: 自建 K8s (推荐生产环境)
+# 3 Master + 5 Worker, Calico CNI, MetalLB
+
+# 方案 B: 开发/测试环境快速搭建
+kind create cluster --name ai-platform --config - <<EOF
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+- role: worker
+- role: worker
+- role: worker
+EOF
+
+# 验证集群就绪
+kubectl get nodes
+kubectl create namespace ai-platform
+```
+
+#### 10.2.2 GPU Operator 部署
+
+```bash
+# NVIDIA GPU Operator
+helm repo add nvidia https://helm.ngc.nvidia.com/nvidia
+helm install gpu-operator nvidia/gpu-operator \
+  --namespace gpu-operator --create-namespace \
+  --set driver.enabled=true \
+  --set toolkit.enabled=true
+
+# 验证 GPU 可用
+kubectl describe nodes | grep nvidia.com/gpu
+
+# 创建 GPU 节点池标签
+kubectl label node gpu-node-1 accelerator=nvidia-a100
+kubectl label node gpu-node-2 accelerator=nvidia-h100
+```
+
+#### 10.2.3 基础设施组件部署
+
+```bash
+# 1. PostgreSQL (业务数据)
+helm install postgresql bitnami/postgresql \
+  --namespace ai-platform \
+  --set auth.database=ai_platform \
+  --set primary.persistence.size=200Gi
+
+# 2. Redis Cluster (缓存/会话/限流)
+helm install redis bitnami/redis-cluster \
+  --namespace ai-platform \
+  --set replicaCount=3
+
+# 3. Milvus (向量数据库)
+helm install milvus milvus/milvus \
+  --namespace ai-platform \
+  --set standalone.resources.limits.memory=32Gi
+
+# 4. Neo4j (图数据库)
+helm install neo4j neo4j/neo4j \
+  --namespace ai-platform
+
+# 5. Kafka (消息队列)
+helm install kafka bitnami/kafka \
+  --namespace ai-platform \
+  --set replicaCount=3
+
+# 6. MinIO (对象存储)
+helm install minio bitnami/minio \
+  --namespace ai-platform \
+  --set mode=distributed \
+  --set persistence.size=500Gi
+
+# 7. Prometheus + Grafana (可观测性)
+helm install kube-prometheus prometheus-community/kube-prometheus-stack \
+  --namespace monitoring --create-namespace
+```
+
+#### 10.2.4 基础设施验证检查清单
+
+| # | 检查项 | 验证命令 | 预期结果 |
+|---|--------|---------|---------|
+| 1 | K8s 集群节点就绪 | `kubectl get nodes` | 全部 Ready |
+| 2 | GPU 可调度 | `kubectl describe nodes \| grep nvidia.com/gpu` | >=1 GPU |
+| 3 | PostgreSQL 连接 | `kubectl exec -it deploy/postgresql -- psql -U postgres` | 进入 psql |
+| 4 | Redis 读写 | `kubectl exec -it deploy/redis -- redis-cli PING` | PONG |
+| 5 | Milvus 健康 | `curl http://milvus:9091/healthz` | 200 OK |
+| 6 | Neo4j 可访问 | `curl http://neo4j:7474` | 200 OK |
+| 7 | Kafka Topic 创建 | `kafka-topics.sh --create --topic test` | Created |
+| 8 | MinIO Bucket | `mc mb ai-platform/test` | Bucket created |
+| 9 | Prometheus Target | 访问 Grafana → Targets | All UP |
+| 10 | 日志采集 | 查询 Loki | 有日志流入 |
+
+### 10.3 Phase 2：AI 能力层部署（Week 3-4）
+
+#### 10.3.1 模型推理引擎部署
+
+```bash
+# vLLM 部署 (高吞吐推理)
+kubectl apply -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-server
+  namespace: ai-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: vllm-server
+  template:
+    metadata:
+      labels:
+        app: vllm-server
+    spec:
+      nodeSelector:
+        accelerator: nvidia-a100
+      containers:
+      - name: vllm
+        image: vllm/vllm-openai:latest
+        args:
+        - --model
+        - deepseek-ai/DeepSeek-V3
+        - --gpu-memory-utilization
+        - "0.9"
+        - --max-model-len
+        - "32768"
+        ports:
+        - containerPort: 8000
+        resources:
+          limits:
+            nvidia.com/gpu: 4
+EOF
+```
+
+#### 10.3.2 模型网关部署
+
+```yaml
+# model-gateway-config.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: model-gateway-config
+  namespace: ai-platform
+data:
+  models.yaml: |
+    providers:
+      - name: openai
+        models: [gpt-4o, gpt-4o-mini]
+        endpoint: https://api.openai.com/v1
+        api_key_env: OPENAI_API_KEY
+      
+      - name: anthropic
+        models: [claude-opus-4-7, claude-sonnet-4-6]
+        endpoint: https://api.anthropic.com/v1
+        api_key_env: ANTHROPIC_API_KEY
+      
+      - name: vllm-self-hosted
+        models: [deepseek-v3]
+        endpoint: http://vllm-server.ai-platform:8000/v1
+      
+      - name: tongyi
+        models: [qwen-max, qwen-plus]
+        endpoint: https://dashscope.aliyuncs.com/compatible-mode/v1
+        api_key_env: DASHSCOPE_API_KEY
+    
+    routing:
+      default: anthropic/claude-sonnet-4-6
+      rules:
+        - pattern: "简单对话|FAQ|基础查询"
+          target: vllm-self-hosted/deepseek-v3
+        - pattern: "复杂推理|代码生成|合规审查"
+          target: anthropic/claude-opus-4-7
+        - pattern: "合规|数据敏感|私有数据"
+          target: vllm-self-hosted/deepseek-v3
+        - pattern: "嵌入|embedding"
+          target: vllm-self-hosted/deepseek-v3
+    
+    fallback:
+      anthropic/claude-opus-4-7:
+        - anthropic/claude-sonnet-4-6
+        - openai/gpt-4o
+        - vllm-self-hosted/deepseek-v3
+      vllm-self-hosted/deepseek-v3:
+        - tongyi/qwen-plus
+        - openai/gpt-4o-mini
+```
+
+#### 10.3.3 RAG 引擎部署
+
+```bash
+# 1. Embedding Service
+kubectl apply -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: embedding-service
+  namespace: ai-platform
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: embedding-service
+  template:
+    metadata:
+      labels:
+        app: embedding-service
+    spec:
+      containers:
+      - name: embedding
+        image: ai-platform/embedding-service:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: MODEL_NAME
+          value: BAAI/bge-large-zh-v1.5
+        - name: MILVUS_HOST
+          value: milvus.ai-platform
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+EOF
+
+# 2. 文档处理管道
+kubectl apply -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: doc-processor
+  namespace: ai-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: doc-processor
+  template:
+    metadata:
+      labels:
+        app: doc-processor
+    spec:
+      containers:
+      - name: doc-processor
+        image: ai-platform/doc-processor:latest
+        ports:
+        - containerPort: 8081
+        env:
+        - name: EMBEDDING_SERVICE
+          value: http://embedding-service.ai-platform:8080
+        - name: CHUNK_SIZE
+          value: "512"
+        - name: CHUNK_OVERLAP
+          value: "50"
+EOF
+
+# 3. 检索服务
+kubectl apply -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: retriever-service
+  namespace: ai-platform
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: retriever-service
+  template:
+    metadata:
+      labels:
+        app: retriever-service
+    spec:
+      containers:
+      - name: retriever
+        image: ai-platform/retriever:latest
+        ports:
+        - containerPort: 8082
+        env:
+        - name: MILVUS_HOST
+          value: milvus.ai-platform
+        - name: ES_HOST
+          value: http://elasticsearch.ai-platform:9200
+        - name: NEO4J_URI
+          value: bolt://neo4j.ai-platform:7687
+        - name: EMBEDDING_SERVICE
+          value: http://embedding-service.ai-platform:8080
+EOF
+```
+
+#### 10.3.4 Prompt Hub 部署
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prompt-hub
+  namespace: ai-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: prompt-hub
+  template:
+    metadata:
+      labels:
+        app: prompt-hub
+    spec:
+      containers:
+      - name: prompt-hub
+        image: ai-platform/prompt-hub:latest
+        ports:
+        - containerPort: 8083
+        env:
+        - name: DB_HOST
+          value: postgresql.ai-platform
+        - name: DB_NAME
+          value: ai_platform
+EOF
+```
+
+#### 10.3.5 AI 能力层验证检查清单
+
+| # | 检查项 | 验证方法 | 预期 |
+|---|--------|---------|------|
+| 1 | vLLM 推理可用 | `curl http://vllm-server:8000/v1/models` | 返回模型列表 |
+| 2 | 模型网关路由 | 发送不同意图请求 | 路由到不同模型 |
+| 3 | 模型网关 Fallback | 模拟主模型超时 | 自动切换到备选 |
+| 4 | Embedding 服务 | `curl -X POST /embed -d '{"text":"测试"}'` | 返回 1024 维向量 |
+| 5 | 文档处理管道 | 上传测试 PDF | 成功分块+入库 |
+| 6 | 检索召回 | 发送 Query | 返回 Top-K 结果 |
+| 7 | Prompt Hub | 创建/发布/回滚 Prompt | 版本正常切换 |
+
+### 10.4 Phase 3：Agent 平台层部署（Week 5-8）
+
+#### 10.4.1 Agent 运行时部署
+
+```yaml
+# agent-runtime-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-runtime
+  namespace: ai-platform
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: agent-runtime
+  template:
+    spec:
+      containers:
+      - name: agent-runtime
+        image: ai-platform/agent-runtime:v1.0
+        ports:
+        - containerPort: 8080
+        env:
+        - name: MODEL_GATEWAY_URL
+          value: http://model-gateway.ai-platform/v1
+        - name: RETRIEVER_URL
+          value: http://retriever-service.ai-platform:8082
+        - name: PROMPT_HUB_URL
+          value: http://prompt-hub.ai-platform:8083
+        - name: MEMORY_REDIS_URL
+          value: redis://redis.ai-platform:6379
+        - name: MEMORY_MILVUS_HOST
+          value: milvus.ai-platform
+        - name: SKILL_REGISTRY_URL
+          value: http://skill-registry.ai-platform:8084
+        - name: EVENTS_KAFKA_BROKERS
+          value: kafka.ai-platform:9092
+```
+
+#### 10.4.2 Agent 编排引擎核心代码骨架
+
+```python
+# agent-runtime/orchestrator.py
+from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.sqlite import SqliteSaver
+from typing import TypedDict, List, Annotated
+import operator
+
+class AgentState(TypedDict):
+    messages: Annotated[List[str], operator.add]
+    current_step: int
+    max_steps: int
+    skill_calls: List[dict]
+    memory_context: str
+    knowledge_context: str
+    human_approval_required: bool
+
+class Orchestrator:
+    """Agent 编排引擎 — 在 LangGraph 之上自研策略层"""
+    
+    def __init__(self, agent_config: dict):
+        self.config = agent_config
+        self.max_steps = agent_config.get("max_steps", 15)
+        self.checkpointer = SqliteSaver.from_conn_string("checkpoints.db")
+        
+    def build_graph(self) -> StateGraph:
+        workflow = StateGraph(AgentState)
+        
+        # 节点
+        workflow.add_node("understand", self.understand_intent)
+        workflow.add_node("retrieve", self.retrieve_knowledge)
+        workflow.add_node("recall", self.recall_memory)
+        workflow.add_node("reason", self.llm_reason)
+        workflow.add_node("execute_skill", self.execute_skill)
+        workflow.add_node("human_approval", self.human_approval)
+        workflow.add_node("respond", self.generate_response)
+        
+        # 边 (编排策略)
+        workflow.set_entry_point("understand")
+        workflow.add_edge("understand", "retrieve")
+        workflow.add_edge("retrieve", "recall")
+        workflow.add_edge("recall", "reason")
+        
+        # 条件边 — Router 策略
+        workflow.add_conditional_edges(
+            "reason",
+            self.decide_next_action,
+            {
+                "call_skill": "execute_skill",
+                "need_approval": "human_approval",
+                "respond": "respond",
+                "max_steps": END
+            }
+        )
+        workflow.add_edge("execute_skill", "reason")  # 循环回 reason
+        workflow.add_edge("human_approval", "respond")
+        workflow.add_edge("respond", END)
+        
+        return workflow.compile(checkpointer=self.checkpointer)
+    
+    def decide_next_action(self, state: AgentState) -> str:
+        if state["current_step"] >= self.max_steps:
+            return "max_steps"
+        last_message = state["messages"][-1] if state["messages"] else ""
+        if "TOOL_CALL:" in last_message:
+            return "call_skill"
+        if state.get("human_approval_required"):
+            return "need_approval"
+        return "respond"
+    
+    async def understand_intent(self, state: AgentState) -> AgentState:
+        """Step 1: 意图理解 — 分类 + 提取槽位"""
+        ...
+    
+    async def retrieve_knowledge(self, state: AgentState) -> AgentState:
+        """Step 2: 知识检索 — 多路召回 + 融合排序"""
+        ...
+    
+    async def recall_memory(self, state: AgentState) -> AgentState:
+        """Step 3: 记忆回忆 — 短期+长期记忆"""
+        ...
+    
+    async def llm_reason(self, state: AgentState) -> AgentState:
+        """Step 4: LLM 推理 — 组装 Context → 调用模型网关 → 解析输出"""
+        ...
+    
+    async def execute_skill(self, state: AgentState) -> AgentState:
+        """Step 5: 技能执行 — 从 Skill Registry 获取技能并调用"""
+        ...
+    
+    async def human_approval(self, state: AgentState) -> AgentState:
+        """Step 6: 人工审批 — 高风险操作触发"""
+        ...
+    
+    async def generate_response(self, state: AgentState) -> AgentState:
+        """Step 7: 生成最终回复"""
+        ...
+```
+
+#### 10.4.3 技能注册中心
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: skill-registry
+  namespace: ai-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: skill-registry
+  template:
+    spec:
+      containers:
+      - name: skill-registry
+        image: ai-platform/skill-registry:latest
+        ports:
+        - containerPort: 8084
+        env:
+        - name: DB_HOST
+          value: postgresql.ai-platform
+EOF
+
+# 注册基础技能
+curl -X POST http://skill-registry.ai-platform:8084/skills \
+  -H "Content-Type: application/yaml" \
+  -d '
+name: track-query
+version: 1.0.0
+type: mcp_server
+endpoint: mcp://tracking-service/query
+description: 运单实时状态查询
+parameters:
+  - name: tracking_number
+    type: string
+    required: true
+'
+```
+
+#### 10.4.4 评估服务部署
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eval-service
+  namespace: ai-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: eval-service
+  template:
+    spec:
+      containers:
+      - name: eval-service
+        image: ai-platform/eval-service:latest
+        ports:
+        - containerPort: 8085
+        env:
+        - name: MODEL_GATEWAY_URL
+          value: http://model-gateway.ai-platform/v1
+        - name: DB_HOST
+          value: postgresql.ai-platform
+EOF
+
+# 创建首个评估集
+curl -X POST http://eval-service.ai-platform:8085/datasets \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "logistics-exception-cases",
+    "version": 1,
+    "industry": "logistics",
+    "cases": [{
+      "input": {"query": "运单 SF1234567890 延迟了，什么时候到？"},
+      "expected": {
+        "must_include": ["预计", "延迟原因", "SF1234567890"],
+        "must_not_include": ["赔钱", "投诉电话"],
+        "action": "track_query"
+      }
+    }]
+  }'
+```
+
+#### 10.4.5 Agent 平台层验证检查清单
+
+| # | 检查项 | 验证方法 | 预期 |
+|---|--------|---------|------|
+| 1 | Agent 运行时健康 | `curl http://agent-runtime:8080/healthz` | 200 |
+| 2 | 编排引擎编译 | 创建简单 QA Agent → 运行 | 多步执行无错误 |
+| 3 | Checkpoint 断点续执 | 模拟中断 → 重新运行 | 从断点恢复 |
+| 4 | 技能注册/调用 | Agent 调用注册技能 | 返回正确结果 |
+| 5 | 分层记忆 | 多轮对话 → 检查上下文 | 记忆正确使用 |
+| 6 | 评估集运行 | 提交评估集 → 执行 | 返回 Score 报告 |
+
+### 10.5 Phase 4：行业方案接入（Week 9-10）
+
+#### 10.5.1 物流行业包部署
+
+```bash
+# 1. 注册物流行业技能
+curl -X POST http://skill-registry.ai-platform:8084/skills/batch \
+  -H "Content-Type: application/json" \
+  -d '[
+    {"name":"track-query","version":"1.0.0","type":"mcp_server","endpoint":"mcp://tracking/query","industry":"logistics"},
+    {"name":"abnormal-detection","version":"1.0.0","type":"api","endpoint":"http://logistics-api/abnormal/detect","industry":"logistics"},
+    {"name":"route-recommend","version":"1.0.0","type":"api","endpoint":"http://logistics-api/route/recommend","industry":"logistics"},
+    {"name":"customer-notify","version":"1.0.0","type":"api","endpoint":"http://notify-service/send","industry":"logistics"},
+    {"name":"carrier-sla-lookup","version":"1.0.0","type":"api","endpoint":"http://logistics-api/carrier/sla","industry":"logistics"},
+    {"name":"weather-query","version":"1.0.0","type":"api","endpoint":"http://weather-api/query","industry":"common"}
+  ]'
+
+# 2. 导入物流知识库
+curl -X POST http://doc-processor.ai-platform:8081/import \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant_id": "logistics-demo",
+    "industry": "logistics",
+    "files": [
+      "s3://ai-platform/knowledge/logistics/sop-transport.md",
+      "s3://ai-platform/knowledge/logistics/carrier-contracts.pdf",
+      "s3://ai-platform/knowledge/logistics/claims-policy.md"
+    ],
+    "chunk_strategy": {
+      "sop-transport.md": "heading",
+      "carrier-contracts.pdf": "clause",
+      "claims-policy.md": "heading"
+    }
+  }'
+
+# 3. 注册物流 Prompt 模板
+curl -X POST http://prompt-hub.ai-platform:8083/prompts \
+  -H "Content-Type: application/yaml" \
+  -d '
+id: prompt-logistics-exception-v1
+name: 物流异常处理系统提示词
+version: 1.0.0
+industry: logistics
+variables:
+  - name: company_name
+    source: tenant_config
+  - name: sop_context
+    source: rag_retrieval
+    top_k: 5
+model_constraints:
+  temperature: 0.3
+  max_tokens: 2560
+template: |
+  你是{{company_name}}的物流异常处理智能助手。
+  
+  职责:
+  1. 识别运输异常类型 (延迟/破损/丢件/地址错误/海关滞留)
+  2. 根据 SOP 分级处理: P1(严重)→人工升级, P2(中等)→推荐方案, P3(轻微)→自动处理
+  3. 查询承运商 SLA 和合同条款进行责任判定
+  4. 涉及赔偿金额>5000元或取消订单时必须人工审批
+  
+  参考知识(来自SOP/合同):
+  {{sop_context}}
+  
+  处理原则:
+  1. 先定位问题根因,再推荐方案
+  2. 优先保障客户体验,同时控制成本
+  3. 无法100%确定时,标记confidence并建议人工介入
+'
+
+# 4. 创建物流异常处理 Agent
+curl -X POST http://agent-runtime.ai-platform:8080/agents \
+  -H "Content-Type: application/yaml" \
+  -d '
+apiVersion: agent.platform/v1
+kind: Agent
+metadata:
+  name: logistics-exception-handler
+  version: 1.0.0
+  industry: logistics
+spec:
+  model:
+    primary: claude-sonnet-4-6
+    fallback: deepseek-v3
+    temperature: 0.3
+    max_tokens: 2560
+  prompt:
+    ref: prompt-logistics-exception-v1
+  skills:
+    - ref: track-query
+      required: true
+    - ref: abnormal-detection
+      required: true
+    - ref: route-recommend
+      required: false
+    - ref: customer-notify
+      required: false
+    - ref: carrier-sla-lookup
+      required: false
+    - ref: weather-query
+      required: false
+  knowledge:
+    - ref: kb-logistics-sop
+      retrieval_top_k: 5
+    - ref: kb-carrier-contracts
+      retrieval_top_k: 3
+  execution:
+    max_steps: 10
+    timeout: 60s
+    human_approval:
+      triggers:
+        - action: cancel_order
+        - amount_gt: 5000
+        - confidence_lt: 0.8
+  evaluation:
+    dataset: logistics-exception-cases
+    min_score: 0.85
+'
+```
+
+#### 10.5.2 行业方案验证检查清单
+
+| # | 检查项 | 验证方法 | 预期 |
+|---|--------|---------|------|
+| 1 | 物流技能全部注册 | `curl http://skill-registry:8084/skills?industry=logistics` | >=6 个 |
+| 2 | 知识库入库 | 查询 Milvus | 有数据 |
+| 3 | Prompt 版本可查 | `curl http://prompt-hub:8083/prompts/logistics-exception-v1` | 返回完整定义 |
+| 4 | Agent 创建成功 | `curl http://agent-runtime:8080/agents/logistics-exception-handler` | 状态=active |
+| 5 | Agent 端到端调用 | 发送测试异常 Query | 多步执行返回结果 |
+
+### 10.6 Phase 5：上线验证（Week 11-12）
+
+#### 10.6.1 端到端集成测试
+
+```python
+# test_e2e.py
+import pytest
+import requests
+
+AGENT_URL = "http://agent-runtime.ai-platform:8080"
+
+@pytest.mark.e2e
+class TestLogisticsAgent:
+    
+    def test_delay_exception_handling(self):
+        """延迟异常处理"""
+        response = requests.post(f"{AGENT_URL}/agents/logistics-exception-handler/run", json={
+            "query": "运单 SF1234567890，原定今天18:00到，但现在是20:00还没到，帮我处理"
+        })
+        data = response.json()
+        assert data["status"] == "completed"
+        assert data["steps_count"] >= 3
+        assert "track-query" in str(data["skill_calls"])
+    
+    def test_damage_exception_human_approval(self):
+        """破损异常触发人工审批"""
+        response = requests.post(f"{AGENT_URL}/agents/logistics-exception-handler/run", json={
+            "query": "货物破损严重价值8000元，申请取消订单并退款"
+        })
+        data = response.json()
+        assert any(c["skill"] == "human_approval" for c in data["skill_calls"])
+    
+    def test_normal_query(self):
+        """普通运单查询不触发异常"""
+        response = requests.post(f"{AGENT_URL}/agents/logistics-exception-handler/run", json={
+            "query": "帮我查一下运单 SF9876543210 到哪了"
+        })
+        assert "abnormal-detection" not in str(response.json()["skill_calls"])
+    
+    def test_multi_turn_memory(self):
+        """多轮对话记忆"""
+        session_id = requests.post(f"{AGENT_URL}/sessions").json()["session_id"]
+        r1 = requests.post(f"{AGENT_URL}/agents/logistics-exception-handler/run", json={
+            "session_id": session_id,
+            "query": "运单 SF1234567890 延迟了"
+        })
+        r2 = requests.post(f"{AGENT_URL}/agents/logistics-exception-handler/run", json={
+            "session_id": session_id,
+            "query": "那帮我通知一下客户吧"
+        })
+        assert "SF1234567890" in str(r2.json()["memory_context"])
+```
+
+#### 10.6.2 性能压测
+
+```bash
+# k6 压测脚本
+cat <<EOF > load-test.js
+import http from 'k6/http';
+import { check } from 'k6';
+
+export const options = {
+  stages: [
+    { duration: '1m', target: 10 },
+    { duration: '3m', target: 50 },
+    { duration: '5m', target: 100 },
+    { duration: '1m', target: 0 },
+  ],
+  thresholds: {
+    'http_req_duration': ['p95<5000'],
+    'http_req_failed': ['rate<0.01'],
+  },
+};
+
+export default function () {
+  const payload = JSON.stringify({
+    query: '运单 SF' + Math.random().toString(36).substring(7) + ' 延迟了怎么办？'
+  });
+  const res = http.post(
+    'http://agent-runtime.ai-platform:8080/agents/logistics-exception-handler/run',
+    payload,
+    { headers: { 'Content-Type': 'application/json' } }
+  );
+  check(res, {
+    'status is 200': (r) => r.status === 200,
+    'response time < 10s': (r) => r.timings.duration < 10000,
+  });
+}
+EOF
+
+k6 run load-test.js
+```
+
+#### 10.6.3 上线验证检查清单
+
+| # | 检查项 | 通过标准 |
+|---|--------|---------|
+| 1 | E2E 测试全通过 | 4/4 用例通过 |
+| 2 | 评估集 Score | >= 0.85 |
+| 3 | P95 延迟 | < 5s |
+| 4 | 错误率 | < 1% |
+| 5 | Skill 调用准确率 | >= 90% |
+| 6 | 语义缓存命中率 | >= 20% |
+| 7 | Human-in-the-loop 误触发率 | < 5% |
+| 8 | 灰度发布 | 10%→50%→100% 无回滚 |
+
+---
+
+## 11. 物流运输异常处理 Agent — 完整案例
+
+### 11.1 业务场景定义
+
+#### 11.1.1 场景选型
+
+选择**运输异常处理**作为案例，因为它是物流行业最高频、最复杂、涉及系统最多的场景：
+
+```
+日均异常处理量 (中型物流企业):
+  总运单: 50,000 单/天
+  ├─ 正常: 47,500 (95%)
+  └─ 异常: 2,500 (5%)
+      ├─ 延迟: 1,200 (48%)  ← 本次案例
+      ├─ 破损: 500 (20%)
+      ├─ 丢件: 300 (12%)
+      ├─ 地址错误: 250 (10%)
+      └─ 海关滞留: 250 (10%)
+```
+
+#### 11.1.2 业务 SOP—人工处理 vs Agent 自动化目标
+
+```
+当前人工处理流程 (平均 15 分钟/单):
+  客服接到投诉 → 查询运单(TMS,2min) → 判断异常类型(1min)
+  → 查询承运商SLA(3min) → 判定责任方(3min) → 制定方案(3min)
+  → 联系客户/承运商(3min)
+
+目标: Agent 自动化 → 平均 2 分钟/单, 覆盖 70% 异常单
+```
+
+### 11.2 Agent 完整设计
+
+#### 11.2.1 Agent 定义
+
+```yaml
+apiVersion: agent.platform/v1
+kind: Agent
+metadata:
+  name: logistics-exception-handler
+  version: 1.0.0
+  industry: logistics
+  owner: operations-team
+spec:
+  description: >
+    运输异常处理 Agent。自动识别延迟、破损、丢件、地址错误、海关滞留五类异常，
+    按 P1/P2/P3 分级处理。P1 升级人工，P2 推荐方案+人工确认，
+    P3 自动执行。集成 TMS/WMS/OMS/承运商系统/通知系统。
+  
+  model:
+    primary: claude-sonnet-4-6
+    fallback: deepseek-v3
+    temperature: 0.2
+    max_tokens: 3072
+  
+  prompt:
+    ref: prompt-logistics-exception-v1
+    
+  skills:
+    - ref: track-query
+      required: true
+    - ref: abnormal-detection
+      required: true
+    - ref: carrier-sla-lookup
+      required: true
+    - ref: route-recommend
+      required: false
+    - ref: customer-notify
+      required: false
+    - ref: carrier-notify
+      required: false
+    - ref: weather-query
+      required: false
+    - ref: claim-init
+      required: false
+    
+  knowledge:
+    - ref: kb-logistics-sop
+      retrieval_top_k: 5
+    - ref: kb-carrier-contracts
+      retrieval_top_k: 3
+    - ref: kb-claims-policy
+      retrieval_top_k: 3
+    
+  memory:
+    short_term:
+      max_turns: 20
+      ttl: 3600
+    long_term:
+      enabled: true
+      scope: tenant
+    
+  execution:
+    max_steps: 10
+    timeout: 60s
+    human_approval:
+      enabled: true
+      triggers:
+        - action: cancel_order
+        - amount_gt: 5000
+        - action: initiate_claim
+          amount_gt: 1000
+        - confidence_lt: 0.75
+    
+  evaluation:
+    dataset: logistics-exception-v1
+    min_score: 0.85
+    online_eval: true
+```
+
+#### 11.2.2 技能清单
+
+| 技能 | 类型 | 端点 | 输入 | 输出 |
+|------|------|------|------|------|
+| **track-query** | MCP | `mcp://tms/track` | tracking_number | status, location, eta, history |
+| **abnormal-detection** | API | `POST /abnormal/detect` | tracking_number | is_abnormal, type, severity, root_cause |
+| **carrier-sla-lookup** | API | `GET /carrier/{id}/sla` | carrier_id, route | promised_eta, penalty_clause, compensation_rate |
+| **route-recommend** | API | `POST /route/recommend` | from, to, constraints | routes[], estimated_time, cost |
+| **customer-notify** | API | `POST /notify/customer` | phone/email, template_id, params | sent, message_id |
+| **weather-query** | API | `GET /weather/{location}` | lat, lng | conditions, alerts |
+| **claim-init** | API | `POST /claims/initiate` | tracking_number, amount, reason | claim_id, status |
+
+#### 11.2.3 知识库内容结构
+
+```
+kb-logistics-sop/
+├── 01-延迟处理流程.md          # P1/P2/P3 分级的延迟处理 SOP
+├── 02-破损处理流程.md          # 破损定级 + 赔偿标准
+├── 03-丢件处理流程.md          # 丢件确认 + 理赔发起
+├── 04-地址错误处理.md          # 地址修正 + 改派流程
+├── 05-海关滞留处理.md          # 滞留原因 + 清关协助
+└── 06-客户沟通话术.md          # 各场景标准话术模板
+
+kb-carrier-contracts/
+├── 顺丰速运合同_2026.pdf       # SLA 条款 + 赔偿标准
+├── 中通快递合同_2026.pdf       # SLA 条款 + 赔偿标准
+└── 德邦物流合同_2026.pdf       # SLA 条款 + 赔偿标准
+
+kb-claims-policy/
+├── 理赔标准流程.md             # 理赔发起→审核→赔付
+├── 理赔金额计算规则.md         # 按异常类型+货值+合同条款
+└── 理赔时效要求.md             # 各承运商理赔时效
+```
+
+### 11.3 完整调用链路—延迟异常场景
+
+#### 11.3.1 步骤拆解
+
+| Step | 名称 | 调用内容 | 输出 |
+|------|------|---------|------|
+| 1 | Intent Classify | 模型网关 → `intent_classify` Prompt | type=delay, severity=P2, tracking_no=SF1234567890 |
+| 2 | Retrieve Knowledge | 并行: Milvus(SOP) + ES(延迟) + Neo4j(承运商链) | 5段SOP + 3段合同条款 |
+| 3 | Recall Memory | Redis (短期记忆) + Milvus (长期记忆) | 本次会话上下文 |
+| 4 | LLM Reason #1 | Context = Prompt+SOP+合同+记忆 | TOOL_CALL: track-query(SF1234567890) |
+| 5 | Execute Skill #1 | MCP: TMS → `/track` | status=delayed, delayed=4h, eta=明天10:00 |
+| 6 | LLM Reason #2 | Context += 运单信息 | TOOL_CALL: carrier-sla-lookup + abnormal-detection |
+| 7 | Execute Skills #2 | 并行: SLA查询 + 异常检测 | 赔款30%, 根因=台风 |
+| 8 | LLM Reason #3 | 组装最终方案 | 5条方案, confidence=0.92, 需审批(赔款>0) |
+| 9 | Human Approval | 推送审批 → 等待 | 人工确认 |
+| 10 | Execute Final | customer-notify (短信通知) | sent=true |
+
+### 11.4 数据流转全景
+
+Agent 每步推理前需要消费的数据:
+
+| 数据源 | 用途 | 延迟要求 |
+|--------|------|---------|
+| **Redis** | Session State (当前会话上下文)、短期记忆、限流计数 | P99 < 2ms |
+| **Milvus** | 知识检索 (SOP/合同/政策)、长期记忆 (历史相似Case) | P99 < 10ms |
+| **Neo4j** | 承运商关系链查询、物流网络拓扑查询 | P99 < 15ms |
+| **Elasticsearch** | 关键词精确匹配、模糊搜索 | P99 < 20ms |
+| **PostgreSQL** | Agent定义/版本、Skill注册、Prompt版本、评估集、租户配置 | P99 < 5ms |
+
+Agent 运行中触发的主要写入操作:
+
+| 写入目标 | 内容 | 保留策略 |
+|---------|------|---------|
+| **Kafka** | Agent状态变更、模型调用日志、审计日志 | 7天 / 90天 / 7年 |
+| **Redis** | Session State (会话状态) | TTL: 会话+30min |
+| **PostgreSQL** | 对话记录、决策记录、审计日志 | 365天 / 永久 / 7年 |
+| **Milvus** | 重要决策 (长期记忆) | 永久 |
+
+### 11.5 端到端数据流示例
+
+以 "运单 SF1234567890 延迟" 完整展示:
+
+```
+用户输入: "运单SF1234567890延迟了，客户说已经晚4小时了，帮我处理"
+
+→ Intent Classify:
+   {intent: "exception_handling", exception_type: "delay",
+    severity: "P2", tracking_number: "SF1234567890"}
+
+→ Knowledge Retrieval (并行):
+   Milvus: SOP§P2延迟处理 (score=0.94), 延迟分级标准 (0.89)
+   ES: 顺丰合同§5.3延迟赔偿 (BM25=8.2)
+   Neo4j: 承运商=顺丰速运, SLA=24h, penalty=30%
+
+→ LLM Reason #1 → TOOL_CALL: track-query(SF1234567890)
+   → {status: delayed, delayed: 4h15m, location: "杭州中转",
+      eta: "2026-05-15 10:00", weather_alert: "台风预警"}
+
+→ LLM Reason #2 → TOOL_CALL: abnormal-detection + carrier-sla-lookup
+   → abnormal: {root_cause: "台风'艾云尼'影响杭州段封路", confidence: 0.95}
+   → SLA: {promised: 24h, actual: 28h+, penalty: "运费30%", max: 200元}
+
+→ LLM Reason #3 → 组装方案:
+   summary: "运单SF1234567890因台风延迟4h15min"
+   recommendations: [通知客户, 无需改路线, 赔偿运费30%≈45元]
+   confidence: 0.93, needs_approval: true
+
+→ Human Approval → 通过
+
+→ customer-notify:
+   "【XX物流】您的快件SF1234567890因台风影响延迟约4小时,
+    预计明日10:00送达,将赔偿运费30%,给您带来不便敬请谅解。"
+
+最终输出:
+  {status: "completed", steps_count: 8, skills_called: 4,
+   confidence: 0.93, duration_ms: 4230,
+   token_usage: {prompt: 2450, completion: 680}}
+```
+
+### 11.6 多 Agent 协作—复合异常
+
+同一案例涉及延迟+破损时，触发 Hierarchical 多 Agent 协作:
+
+```
+              ┌────────────────────────┐
+              │ Supervisor Agent        │
+              │ "复合异常:延迟+破损"     │
+              └──┬──────────┬──────────┘
+                 │          │
+        ┌────────▼──┐  ┌───▼─────────┐
+        │ Delay      │  │ Damage       │
+        │ Specialist │  │ Specialist   │
+        │ 查询延迟SOP │  │ 查询破损SOP   │
+        │ 查询SLA    │  │ 查询理赔政策   │
+        │ 建议赔偿    │  │ 计算赔偿      │
+        └────────┬──┘  └───┬─────────┘
+                 │          │
+        ┌────────▼──────────▼──────────┐
+        │ Aggregator Agent              │
+        │ "延迟赔30%+破损赔50%=总赔"    │
+        └──────────────────────────────┘
+```
+
+---
+
+## 12. Agent 执行准确率提升体系
+
+### 12.1 准确率定义与度量
+
+#### 12.1.1 五维度复合指标
+
+| 维度 | 度量方法 | 目标 | 数据来源 |
+|------|---------|------|---------|
+| **P1: 意图识别准确率** | 分类正确数 / 总请求数 | ≥95% | LLM-as-Judge + 人工抽检(5%) |
+| **P2: 知识检索准确率** | Recall@5 = Top-5相关文档数 / 总相关文档数 | ≥90% | 人工标注金标数据集 |
+| **P3: Skill调用准确率** | 正确(Skill+参数)数 / 总调用数 | ≥92% | 自动校验(参数Schema) + 人工抽检 |
+| **P4: 推理质量准确率** | 综合 Score (准确性+有用性+安全性) | ≥85% | LLM-as-Judge + 用户反馈 |
+| **P5: 端到端成功率** | 无需人工介入完成数 / 总任务数 | ≥80% | Kafka事件流 + 审批触发日志 |
+
+### 12.2 Prompt 工程体系
+
+#### 12.2.1 Prompt 分层架构
+
+```
+Layer 1: Base Prompt (平台级, 不可被租户覆盖)
+  ├─ 通用安全约束, 通用行为规范, 模型约束默认值
+Layer 2: Industry Prompt (行业级)
+  ├─ 术语定义, 行业规则, 异常分级标准
+Layer 3: Agent Prompt (Agent 级)
+  ├─ 具体场景定义, Skill 调用策略, 业务规则
+Layer 4: Tenant Override (租户定制, 可选)
+  └─ 企业特定规则, 品牌语气调整, 自定义 SOP 引用
+```
+
+#### 12.2.2 三大优化方法
+
+**方法一: Few-Shot 示例注入** — 在 System Prompt 中注入 3-5 个高质量处理示例,引导 LLM 行为模式
+
+**方法二: Chain-of-Thought 强制推理链** — 要求 LLM 按固定步骤推理 (信息提取→数据获取→知识检索→判定推荐→输出)
+
+**方法三: A/B 测试框架** — 对同一评估集跑两个 Prompt 版本,输出五维度对比报告+显著性检验
+
+#### 12.2.3 Prompt 回归测试 CI/CD
+
+```
+每次 Prompt 变更 → 自动触发:
+  Step 1: 跑评估集 (准确性+安全性+格式+回归对比)
+  Step 2: 对比报告:
+    Score下降>5% → ❌ 阻断
+    Score波动<5% → ⚠️ 人工审核
+    Score上升 → ✅ 自动合并
+  Step 3: 灰度发布 (10%→50%→100%)
+```
+
+### 12.3 RAG 检索质量提升
+
+#### 12.3.1 五步法
+
+| # | 抓手 | 方案 | 效果 |
+|---|------|------|------|
+| ① | Query 改写 | HyDE(假设文档嵌入)+术语扩展+多轮上下文补全 | Recall@5 +15-20% |
+| ② | 混合检索 | Milvus向量+ES关键词+Neo4j图三路召回 | Recall@5 +10-15% |
+| ③ | 分块策略优化 | 文档类型感知分块 (见第4章分块策略矩阵) | Chunk相关度 +20% |
+| ④ | Rerank精排 | Cross-Encoder对Top-20精排→Top-5 | Precision@5 +25-35% |
+| ⑤ | 知识库治理 | 文档版本管理+时效标记+定期清理 | 错误率 -30-50% |
+
+#### 12.3.2 核心实现
+
+```python
+# Query 改写 — 多策略扩展
+class QueryRewriter:
+    async def rewrite(self, query, context) -> List[str]:
+        queries = [query]  # 原始Query
+        # 策略1: HyDE — 生成假设答案替代Query
+        hyde = await self.llm.generate("根据问题生成可能的答案...")
+        queries.append(hyde)
+        # 策略2: 术语扩展 — "快递"→"快递/快件/包裹/运单"
+        expanded = await self.llm.generate("替换为物流术语...")
+        queries.extend(expanded.split("\n"))
+        # 策略3: 多轮上下文补全 — "那这个呢?"→完整独立问题
+        if context.get("history"):
+            completed = await self.llm.generate("改写为独立完整问题...")
+            queries.append(completed)
+        return queries[:5]
+```
+
+```python
+# Rerank — Cross-Encoder精排 + MMR多样性去重
+class Reranker:
+    async def rerank(self, query, candidates, top_k=5):
+        # Step 1: Cross-Encoder打分
+        pairs = [(query, doc.content) for doc in candidates]
+        scores = self.cross_encoder.predict(pairs)
+        # Step 2: 时效加权 — 7天内文档+0.1
+        # Step 3: MMR多样性去重 — λ=0.7平衡相关性和多样性
+        ...
+        return selected[:top_k]
+```
+
+### 12.4 Skill 路由准确性提升
+
+#### 12.4.1 错误类型分布
+
+| 错误类型 | 占比 | 示例 |
+|---------|------|------|
+| 遗漏调用(该调没调) | 40% | 应该查SLA但直接下结论 |
+| 多余调用(不该调乱调) | 15% | 简单查询却调用理赔Skill |
+| 参数错误(调了但参数错) | 25% | 用客户名当运单号查询 |
+| Skill混淆(选了相似但错的) | 10% | 调了route-recommend而非abnormal-detection |
+| 顺序错误(调了但时机错) | 10% | 先通知客户再查SLA |
+
+#### 12.4.2 三大提升方案
+
+**方案一: Skill Description 优化** — 结构化+触发条件+反例+依赖声明
+**方案二: Skill Validator** — LLM选择Skill后在调用前验证:必填参数完整性/依赖Skill已执行/参数类型校验
+**方案三: 历史纠错学习** — 人工纠正→写入long-term memory→检索相似Case的Few-Shot
+
+### 12.5 多 Agent 协作可靠性
+
+- **协作模式自动选择**: 单领域→Sequential; 多领域独立→Router; 多领域相互依赖→Hierarchical; 高风险→Debate
+- **Supervisor 幻觉防护**: 分配→并行执行→交叉验证(confidence<0.7重新分配)→冲突检测→汇总
+
+### 12.6 Human-in-the-Loop 机制
+
+#### 12.6.1 审批触发维度
+
+| 维度 | 触发规则 |
+|------|---------|
+| 操作类型 | cancel_order→始终审批; initiate_claim→金额>1000审批 |
+| 金额 | >5000元→审批 |
+| 置信度 | <0.75→审批; <0.85+涉及赔偿→审批 |
+| 异常等级 | P1→始终审批; P2+涉及赔偿→审批 |
+| 客户等级 | VIP→所有操作审批; 大客户→涉及金额审批 |
+
+#### 12.6.2 审批反馈闭环
+
+人工审批不仅是"通过/驳回",更是 Agent 学习的信号。每次人工驳回都记录为 training_example,包括原始Query、Agent错误输出、人工修正、纠错类型。每周聚合分析高频纠错类型,针对性优化Prompt/Skill描述/知识库。
+
+### 12.7 评估反馈闭环
+
+```
+离线评估(发布前必过) → 灰度发布(10%→50%→100%)
+  → 在线监控(实时指标+异常告警)
+  → 用户反馈收集(👍👎+纠错)
+  → 自动/半自动优化 → 回到离线评估
+```
+
+### 12.8 实战提升路径（90天计划）
+
+```
+Week 1-2: 建立基线 — 评估服务+首个数据集+基线Score+在线监控
+Week 3-4: Prompt优化 — Few-Shot+CoT+A/B测试+回归CI/CD → P1+P4 +5-10%
+Week 5-6: RAG质量 — Query改写+Rerank+分块策略+知识库清理 → P2 +15-20%
+Week 7-8: Skill路由 — Description重写+Validator+纠错Few-Shot → P3 +10-15%
+Week 9-10: 端到端 — HITL触发调优+多Agent协作+灰度+压测 → P5 +15-20%
+Week 11-12: 持续优化 — 评估集自动进化+每周纠错分析+知识库自动补充
+```
+
+#### 12.8.1 准确率提升效果预估
+
+```
+五维度 Score 提升预估:
+
+          Day 1     Week 4    Week 8    Week 12   目标
+P1 意图  0.88  →   0.92  →   0.94  →   0.96  →  ≥0.95 ✅
+P2 检索  0.70  →   0.80  →   0.87  →   0.91  →  ≥0.90 ✅
+P3 Skill 0.78  →   0.84  →   0.90  →   0.93  →  ≥0.92 ✅
+P4 推理  0.72  →   0.78  →   0.83  →   0.87  →  ≥0.85 ✅
+P5 端到端 0.65  →   0.72  →   0.78  →   0.83  →  ≥0.80 ✅
+─────────────────────────────────────────────────────
+综合      0.75  →   0.81  →   0.86  →   0.90  →  ≥0.88
+```
+
+---
+
+*文档结束。*
