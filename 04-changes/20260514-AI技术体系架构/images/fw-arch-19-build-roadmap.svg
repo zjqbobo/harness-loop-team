@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600">
+  <defs>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/></marker>
+    <marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#dc2626"/></marker>
+    <filter id="shadow" x="-3%" y="-3%" width="108%" height="108%"><feDropShadow dx="1" dy="2" stdDeviation="3" flood-opacity="0.1"/></filter>
+  </defs>
+  <style>text { font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }</style>
+  <rect width="960" height="600" fill="#ffffff"/>
+  <text x="480" y="24" text-anchor="middle" font-size="14" font-weight="600" fill="#111827">Agent 平台从零搭建五阶段路线图</text>
+
+  <!-- Phase 1 bar -->
+  <rect x="50" y="50" width="860" height="90" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="50" y="50" width="220" height="90" rx="8" fill="#16a34a"/>
+  <rect x="258" y="50" width="12" height="90" fill="#16a34a"/>
+  <text x="160" y="78" text-anchor="middle" font-size="13" font-weight="600" fill="#fff">Phase 1</text>
+  <text x="160" y="98" text-anchor="middle" font-size="10" fill="#dcfce7">基础设施层</text>
+  <text x="160" y="116" text-anchor="middle" font-size="9" fill="#dcfce7">Week 1-2</text>
+
+  <text x="300" y="75" font-size="10" fill="#15803d">K8s集群 + GPU Operator</text>
+  <text x="300" y="92" font-size="10" fill="#15803d">PostgreSQL + Redis + Milvus + Neo4j</text>
+  <text x="300" y="109" font-size="10" fill="#15803d">Kafka + MinIO + Prometheus+Grafana</text>
+  <text x="300" y="126" font-size="9" fill="#6b7280">10项验证检查清单</text>
+
+  <line x1="160" y1="140" x2="160" y2="165" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <!-- Phase 2 -->
+  <rect x="50" y="170" width="860" height="80" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="50" y="170" width="220" height="80" rx="8" fill="#2563eb"/>
+  <rect x="258" y="170" width="12" height="80" fill="#2563eb"/>
+  <text x="160" y="198" text-anchor="middle" font-size="13" font-weight="600" fill="#fff">Phase 2</text>
+  <text x="160" y="218" text-anchor="middle" font-size="10" fill="#bfdbfe">AI 能力层</text>
+  <text x="160" y="234" text-anchor="middle" font-size="9" fill="#bfdbfe">Week 3-4</text>
+
+  <text x="300" y="200" font-size="10" fill="#1d4ed8">vLLM自建推理 + 模型网关(多供应商+路由)</text>
+  <text x="300" y="217" font-size="10" fill="#1d4ed8">Embedding服务 + 文档处理管道 + 检索服务</text>
+  <text x="300" y="234" font-size="10" fill="#1d4ed8">Prompt Hub (版本管理+A/B测试)</text>
+
+  <line x1="160" y1="250" x2="160" y2="275" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <!-- Phase 3 -->
+  <rect x="50" y="280" width="860" height="80" rx="8" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="50" y="280" width="220" height="80" rx="8" fill="#7c3aed"/>
+  <rect x="258" y="280" width="12" height="80" fill="#7c3aed"/>
+  <text x="160" y="308" text-anchor="middle" font-size="13" font-weight="600" fill="#fff">Phase 3</text>
+  <text x="160" y="328" text-anchor="middle" font-size="10" fill="#ddd6fe">Agent 平台层</text>
+  <text x="160" y="344" text-anchor="middle" font-size="9" fill="#ddd6fe">Week 5-8</text>
+
+  <text x="300" y="310" font-size="10" fill="#7c3aed">Agent运行时 + 编排引擎(LangGraph+自研)</text>
+  <text x="300" y="327" font-size="10" fill="#7c3aed">Skill Registry + Eval Service + 技能注册</text>
+  <text x="300" y="344" font-size="10" fill="#7c3aed">分层记忆 + 评估数据集 + Agent事件流</text>
+
+  <line x1="160" y1="360" x2="160" y2="385" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <!-- Phase 4 -->
+  <rect x="50" y="390" width="860" height="80" rx="8" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="50" y="390" width="220" height="80" rx="8" fill="#ea580c"/>
+  <rect x="258" y="390" width="12" height="80" fill="#ea580c"/>
+  <text x="160" y="418" text-anchor="middle" font-size="13" font-weight="600" fill="#fff">Phase 4</text>
+  <text x="160" y="438" text-anchor="middle" font-size="10" fill="#fed7aa">行业方案接入</text>
+  <text x="160" y="454" text-anchor="middle" font-size="9" fill="#fed7aa">Week 9-10</text>
+
+  <text x="300" y="420" font-size="10" fill="#c2410c">物流行业技能注册(6+技能)</text>
+  <text x="300" y="437" font-size="10" fill="#c2410c">知识库导入 + Prompt模板注册</text>
+  <text x="300" y="454" font-size="10" fill="#c2410c">物流异常处理Agent创建 + 端到端验证</text>
+
+  <line x1="160" y1="470" x2="160" y2="495" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <!-- Phase 5 -->
+  <rect x="50" y="500" width="860" height="80" rx="8" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="50" y="500" width="220" height="80" rx="8" fill="#dc2626"/>
+  <rect x="258" y="500" width="12" height="80" fill="#dc2626"/>
+  <text x="160" y="528" text-anchor="middle" font-size="13" font-weight="600" fill="#fff">Phase 5</text>
+  <text x="160" y="548" text-anchor="middle" font-size="10" fill="#fecaca">上线验证</text>
+  <text x="160" y="564" text-anchor="middle" font-size="9" fill="#fecaca">Week 11-12</text>
+
+  <text x="300" y="530" font-size="10" fill="#b91c1c">E2E集成测试(4/4) + 性能压测(P95&lt;5s)</text>
+  <text x="300" y="547" font-size="10" fill="#b91c1c">灰度发布(10%→50%→100%) + 监控Dashboard</text>
+  <text x="300" y="564" font-size="10" fill="#b91c1c">10项上线验证检查清单</text>
+
+</svg>
