@@ -1,8 +1,8 @@
 # AI Agent 平台 (aPaaS) — 多行业 AI 技术体系架构设计方案
 
-**版本**: v2.1
+**版本**: v2.2
 **日期**: 2026-05-14
-**状态**: 设计完成，待审阅。v2.1 新增：Prompt Hub 独立服务设计、知识向量与原文存储关系、会话三层存储原理与 recall 决策逻辑
+**状态**: 设计完成，待审阅。v2.2 新增：A2A 协议完整设计（Agent Card 注册/发现/任务委托/自研 Registry 实现）
 
 ---
 
@@ -23,6 +23,8 @@
 13. [Java 技术栈集成方案](#13-java-技术栈集成方案)
 14. [Prompt Hub 独立服务设计](#14-prompt-hub-独立服务设计)
 15. [知识向量与原文存储关系](#15-知识向量与原文存储关系)
+16. [会话三层存储原理与 Recall 决策逻辑](#16-会话三层存储原理与-recall-决策逻辑)
+17. [A2A 协议与 Agent 自动发现](#17-a2a-协议与-agent-自动发现)
 16. [会话三层存储原理与 Recall 决策逻辑](#16-会话三层存储原理与-recall-决策逻辑)
 13. [Java 技术栈集成方案](#13-java-技术栈集成方案)
 
@@ -2553,6 +2555,420 @@ Step 3 — Recall:
      [History]       ← 当前对话
      [User Message]  ← "上次那个延迟单最后怎么处理的？"
 ```
+
+---
+
+---
+
+## 17. A2A 协议与 Agent 自动发现
+
+### 17.1 协议选型与背景
+
+A2A (Agent-to-Agent) 是 Google 于 2025 年 4 月发布的开放协议，用于 Agent 间通信。核心解决两个问题：
+
+- **Agent 发现** — Agent A 如何知道 Agent B 存在、能做什么、在哪调用
+- **任务委托** — Agent A 如何将任务发送给 Agent B 并获取结果
+
+A2A 与本平台其他协议的定位：
+
+| 协议 | 用途 | 在本平台的位置 |
+|------|------|--------------|
+| **A2A** | Agent 间任务委托和状态同步 | 多 Agent 协作场景 (Hierarchical/Debate/Mesh) |
+| **MCP** | Agent 调用外部 Tool/Skill | Agent → Skill 执行 |
+| **内部 gRPC** | 平台内 Agent 间高性能通信 | 同服务内编排引擎 → 编排引擎 |
+| **REST** | 外部系统集成 | Java 后端 → Agent 服务 |
+
+### 17.2 开源现状与选型
+
+| 组件 | 成熟度 | 结论 |
+|------|--------|------|
+| Google A2A 协议规范 | ✅ 2025.4 发布，稳定 | 采用标准协议 |
+| Google 官方 SDK (Python/Java/JS) | ✅ 可用 | 采用官方 SDK 实现通信层 |
+| 开源 A2A Registry | ❌ 社区实验项目，stars<100 | **自研** |
+
+结论：**A2A 通信层用 Google 官方 SDK，Registry 自研。** 自研成本不高——核心仅 ~300 行代码 + 一张 PG 表。
+
+### 17.3 Agent Card 标准
+
+A2A 协议的核心是 Agent Card——每个 Agent 的标准自描述文件，暴露在 `GET /.well-known/agent.json`：
+
+```json
+{
+  "name": "logistics-exception-handler",
+  "description": "物流运输异常处理 Agent。识别延迟、破损、丢件、地址错误、海关滞留五类异常，按 P1/P2/P3 分级处理。",
+  "url": "https://agent-service.ai-platform/agents/exception",
+  "provider": {
+    "organization": "AI 平台部",
+    "url": "https://ai-platform.example.com"
+  },
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": true,
+    "stateTransitionHistory": true
+  },
+  "skills": [
+    {
+      "id": "track-query",
+      "name": "运单状态查询",
+      "description": "【何时调用】需要查询运单实时状态时；【输出】status, location, eta, history",
+      "tags": ["logistics", "tracking"]
+    },
+    {
+      "id": "abnormal-detection",
+      "name": "异常检测",
+      "description": "【何时调用】用户描述了运单异常情况时；【输出】is_abnormal, type, severity, root_cause",
+      "tags": ["logistics", "exception", "delay"]
+    },
+    {
+      "id": "carrier-sla-lookup",
+      "name": "承运商 SLA 查询",
+      "description": "【何时调用】需要查询承运商合同条款和赔偿标准时；【输出】promised_eta, penalty_clause, compensation_rate",
+      "tags": ["logistics", "sla", "carrier"]
+    }
+  ],
+  "defaultInputModes": ["text"],
+  "defaultOutputModes": ["text"],
+  "version": "1.0.0",
+  "status": "active"
+}
+```
+
+### 17.4 Agent 自动发现流程
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Agent 自动发现三步                             │
+│                                                                 │
+│  ① 启动注册                                                     │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ 每个 Agent 启动时:                                         │   │
+│  │   1. 读取自己的 agent.json (Agent Card)                    │   │
+│  │   2. POST /a2a/agents/register → A2A Registry             │   │
+│  │   3. 启动后台心跳，每 30s: PUT /heartbeat                  │   │
+│  │   超时 90s 未心跳 → Registry 自动标记 offline              │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                         │                                        │
+│                         ▼                                        │
+│  ② 技能发现                                                     │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ Supervisor Agent 需要委托子任务时:                          │   │
+│  │   GET /a2a/agents?skill=delay_detection&status=active     │   │
+│  │   → Registry 返回匹配的 Agent 列表 (按技能描述+标签匹配)     │   │
+│  │                                                          │   │
+│  │   匹配算法:                                                │   │
+│  │   · 技能 ID 精确匹配 (最高权重)                             │   │
+│  │   · 技能 description 语义匹配 (中等权重)                    │   │
+│  │   · 标签 tags 交集 (最低权重)                              │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                         │                                        │
+│                         ▼                                        │
+│  ③ 任务委托                                                     │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ Supervisor 选定目标 Agent → 通过 Higress Gateway 路由:      │   │
+│  │   POST /a2a/tasks (send)                                  │   │
+│  │   {                                                       │   │
+│  │     "id": "task-001",                                     │   │
+│  │     "sessionId": "sess-042",                              │   │
+│  │     "message": {"role": "user",                           │   │
+│  │       "parts": [{"text": "分析运单SF123延迟原因"}]}         │   │
+│  │   }                                                       │   │
+│  │   → SSE 流式返回中间状态 → 最终返回 completed/failed        │   │
+│  └──────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 17.5 A2A Registry 自研实现
+
+#### 17.5.1 数据模型
+
+```sql
+-- A2A Registry 核心表 (复用 ai_platform PG)
+CREATE TABLE a2a_agents (
+    id              SERIAL PRIMARY KEY,
+    name            TEXT UNIQUE NOT NULL,       -- Agent 唯一名称
+    url             TEXT NOT NULL,              -- 调用地址
+    description     TEXT,                       -- 功能描述
+    organization    TEXT,                       -- 所属组织
+    capabilities    JSONB DEFAULT '{}',         -- {streaming, push, stateHistory}
+    skills          JSONB DEFAULT '[]',         -- [{id, name, description, tags}]
+    tags            TEXT[] DEFAULT '{}',        -- 全局标签，用于粗筛
+    version         TEXT,
+    status          TEXT DEFAULT 'active',      -- active | offline | error
+    last_heartbeat  TIMESTAMPTZ DEFAULT NOW(),
+    registered_at   TIMESTAMPTZ DEFAULT NOW(),
+    metadata        JSONB DEFAULT '{}'          -- 扩展字段
+);
+
+-- 索引
+CREATE INDEX idx_a2a_agents_status ON a2a_agents(status);
+CREATE INDEX idx_a2a_agents_tags ON a2a_agents USING GIN(tags);
+CREATE INDEX idx_a2a_agents_skills ON a2a_agents USING GIN(skills);
+```
+
+#### 17.5.2 API 设计
+
+```
+POST   /a2a/agents/register      # Agent 注册
+PUT    /a2a/agents/:name/heartbeat  # 心跳续约
+DELETE /a2a/agents/:name          # Agent 下线/注销
+GET    /a2a/agents                # 查询/发现 (支持 skill/capability/tags/status 过滤)
+GET    /a2a/agents/:name          # 获取单个 Agent Card
+```
+
+#### 17.5.3 核心实现
+
+```python
+# a2a-registry/registry.py
+import asyncio
+from datetime import datetime, timezone, timedelta
+from fastapi import FastAPI, HTTPException, Query
+
+app = FastAPI(title="A2A Registry Service")
+
+class A2ARegistry:
+    """Agent 注册中心 — 核心仅需 ~300 行"""
+    
+    def __init__(self, db):
+        self.db = db
+        # 启动后台清理任务
+        asyncio.create_task(self._cleanup_offline_agents())
+    
+    async def register(self, agent_card: dict) -> dict:
+        """Agent 启动注册"""
+        existing = await self.db.fetchrow(
+            "SELECT id FROM a2a_agents WHERE name = $1",
+            agent_card["name"]
+        )
+        if existing:
+            # 重连场景：更新状态和心跳
+            await self.db.execute("""
+                UPDATE a2a_agents 
+                SET status = 'active', 
+                    url = $2,
+                    skills = $3,
+                    tags = $4,
+                    last_heartbeat = NOW()
+                WHERE name = $1
+            """, agent_card["name"], agent_card["url"],
+                agent_card.get("skills", []), agent_card.get("tags", []))
+        else:
+            await self.db.execute("""
+                INSERT INTO a2a_agents (name, url, description, organization, 
+                    capabilities, skills, tags, version)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            """, agent_card["name"], agent_card["url"],
+                agent_card.get("description"),
+                agent_card.get("provider", {}).get("organization"),
+                agent_card.get("capabilities", {}),
+                agent_card.get("skills", []),
+                agent_card.get("tags", []),
+                agent_card.get("version"))
+        
+        return {"status": "registered", "name": agent_card["name"]}
+    
+    async def heartbeat(self, agent_name: str):
+        """每 30s 心跳续约"""
+        result = await self.db.execute("""
+            UPDATE a2a_agents 
+            SET last_heartbeat = NOW(), status = 'active'
+            WHERE name = $1
+        """, agent_name)
+        if result == "UPDATE 0":
+            raise HTTPException(404, "Agent not found")
+        return {"status": "ok"}
+    
+    async def search(
+        self, 
+        skill: str = None,
+        capability: str = None,
+        tags: list[str] = None,
+        status: str = "active"
+    ) -> list[dict]:
+        """Agent 发现 — Supervisor 用这个找子 Agent"""
+        
+        query = "SELECT * FROM a2a_agents WHERE status = $1"
+        params = [status]
+        param_idx = 2
+        
+        if skill:
+            # 技能匹配: 先精确匹配 ID，再语义匹配 description
+            query += f" AND ("
+            query += f"  skills::jsonb @> '[{{\"id\": \"{skill}\"}}]'::jsonb"
+            query += f"  OR skills::text ILIKE $%d" % param_idx
+            query += f" )"
+            params.append(f"%{skill}%")
+            param_idx += 1
+        
+        if tags:
+            # 标签交集
+            query += f" AND tags && $%d::text[]" % param_idx
+            params.append(tags)
+            param_idx += 1
+        
+        query += " ORDER BY last_heartbeat DESC LIMIT 20"
+        
+        rows = await self.db.fetch(query, *params)
+        return [
+            {
+                "name": r["name"], "url": r["url"],
+                "description": r["description"],
+                "skills": r["skills"], "tags": r["tags"],
+                "status": r["status"]
+            }
+            for r in rows
+        ]
+    
+    async def deregister(self, agent_name: str):
+        """Agent 下线"""
+        await self.db.execute("""
+            UPDATE a2a_agents SET status = 'offline' WHERE name = $1
+        """, agent_name)
+        return {"status": "deregistered"}
+    
+    async def _cleanup_offline_agents(self):
+        """后台任务: 超过 90s 未心跳 → 标记 offline"""
+        while True:
+            await asyncio.sleep(30)
+            threshold = datetime.now(timezone.utc) - timedelta(seconds=90)
+            await self.db.execute("""
+                UPDATE a2a_agents 
+                SET status = 'offline'
+                WHERE status = 'active' 
+                  AND last_heartbeat < $1
+            """, threshold)
+
+
+# FastAPI 路由
+@app.post("/a2a/agents/register")
+async def register(agent_card: dict):
+    return await registry.register(agent_card)
+
+@app.put("/a2a/agents/{name}/heartbeat")
+async def heartbeat(name: str):
+    return await registry.heartbeat(name)
+
+@app.get("/a2a/agents")
+async def search(
+    skill: str = Query(None),
+    tags: list[str] = Query(None),
+    status: str = "active"
+):
+    return await registry.search(skill=skill, tags=tags, status=status)
+
+@app.delete("/a2a/agents/{name}")
+async def deregister(name: str):
+    return await registry.deregister(name)
+```
+
+### 17.6 Supervisor Agent 如何使用 A2A 发现 + 委托
+
+```python
+# orchestrator/supervisor.py
+from google.a2a import A2AClient  # Google 官方 SDK
+from google.a2a.types import Task, Message, Part
+
+class SupervisorAgent:
+    
+    def __init__(self, registry_url: str):
+        self.registry = A2ARegistryClient(registry_url)
+    
+    async def delegate_complex_task(self, task: dict) -> dict:
+        """处理复合异常 (如延迟+破损)"""
+        
+        # Step 1: 从 Registry 发现可用的 Specialist Agent
+        agents = await self.registry.search(
+            skill=task["required_skill"],  # "delay_detection"
+            tags=["logistics"]
+        )
+        
+        if not agents:
+            # 没找到 → 降级: Supervisor 自己处理
+            return await self._handle_locally(task)
+        
+        # Step 2: 选择最优 Agent
+        target = self._select_best_match(task, agents)
+        
+        # Step 3: A2A 任务委托
+        a2a_client = A2AClient(agent_url=target["url"])
+        
+        task_result = await a2a_client.send_task(
+            task=Task(
+                id=f"subtask-{uuid4()}",
+                session_id=task["parent_session_id"],
+                message=Message(
+                    role="user",
+                    parts=[Part(text=task["sub_query"])]
+                )
+            )
+        )
+        
+        # Step 4: SSE 流式等待完成
+        async for event in a2a_client.get_task_updates(task_result.id):
+            if event.status == "completed":
+                return event.artifacts[0].parts[0].text
+        
+        return {"status": "failed", "reason": "timeout"}
+    
+    def _select_best_match(self, task: dict, agents: list[dict]) -> dict:
+        """技能匹配 + 负载均衡选最优"""
+        scored = []
+        for agent in agents:
+            # 技能关键词匹配
+            skill_score = sum(
+                3 if s["id"] == task.get("required_skill") else
+                1 if task.get("query", "") in s.get("description", "")
+                else 0
+                for s in agent["skills"]
+            )
+            scored.append((agent, skill_score))
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return scored[0][0]
+```
+
+### 17.7 A2A 在本平台中的位置
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                     A2A 在平台中的完整位置                          │
+│                                                                  │
+│  跨 Agent 通信层 (A2A 协议)                                        │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │  Supervisor Agent ──A2A──► Specialist Agent A              │  │
+│  │         │                         │                        │  │
+│  │         ├──A2A──► Specialist Agent B                       │  │
+│  │         │                         │                        │  │
+│  │         └──A2A──► Specialist Agent C                       │  │
+│  └────────────────────────────────────────────────────────────┘  │
+│                              │                                    │
+│        Higress Gateway (流量路由 + 灰度 + 安全)                    │
+│                              │                                    │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │  A2A Registry Service (自研，~300行 + 1张PG表)              │    │
+│  │  · Agent Card 注册/心跳/下线                               │    │
+│  │  · 技能匹配发现                                             │    │
+│  │  · 与 Skill Registry 共用 PG 实例                           │    │
+│  └──────────────────────────────────────────────────────────┘    │
+│                                                                  │
+│  Agent 内部编排层 (LangGraph StateGraph)                           │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │  LangGraph 进程内 StateGraph:                              │    │
+│  │  understand → retrieve → recall → reason ⇄ skill → respond│    │
+│  │  (不经过 A2A 协议，不经过网络)                               │    │
+│  └──────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 17.8 部署规格
+
+| 指标 | 值 |
+|------|-----|
+| 服务名称 | `a2a-registry` |
+| 部署方式 | K8s Deployment，2 副本 |
+| 数据库 | 复用 ai_platform PG 的 `a2a_agents` 表 |
+| 资源需求 | 0.5 vCPU, 256MB RAM |
+| 心跳间隔 | 30s |
+| 超时下线 | 90s (3 次心跳未响应) |
+| 外部依赖 | 无（不引入新中间件） |
 
 ---
 
