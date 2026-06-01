@@ -1,8 +1,8 @@
 # AI Agent 平台 (aPaaS) — 多行业 AI 技术体系架构设计方案
 
-**版本**: v2.2
+**版本**: v2.3
 **日期**: 2026-05-14
-**状态**: 设计完成，待审阅。v2.2 新增：A2A 协议完整设计（Agent Card 注册/发现/任务委托/自研 Registry 实现）
+**状态**: 设计完成，待审阅。v2.3 新增：技能市场服务边界与发布生效机制
 
 ---
 
@@ -25,8 +25,7 @@
 15. [知识向量与原文存储关系](#15-知识向量与原文存储关系)
 16. [会话三层存储原理与 Recall 决策逻辑](#16-会话三层存储原理与-recall-决策逻辑)
 17. [A2A 协议与 Agent 自动发现](#17-a2a-协议与-agent-自动发现)
-16. [会话三层存储原理与 Recall 决策逻辑](#16-会话三层存储原理与-recall-决策逻辑)
-13. [Java 技术栈集成方案](#13-java-技术栈集成方案)
+18. [技能市场：服务边界与发布生效机制](#18-技能市场服务边界与发布生效机制)
 
 ---
 
@@ -2969,6 +2968,167 @@ class SupervisorAgent:
 | 心跳间隔 | 30s |
 | 超时下线 | 90s (3 次心跳未响应) |
 | 外部依赖 | 无（不引入新中间件） |
+
+---
+
+---
+
+## 18. 技能市场：服务边界与发布生效机制
+
+### 18.1 定位——技能市场不是独立服务
+
+**技能市场 = Skill Registry（后端）+ Admin UI（前端展示）。** 不需要新建服务，复用已有组件。
+
+| 组件 | 角色 | 部署方式 |
+|------|------|---------|
+| **Skill Registry** | 技能市场后端：技能定义存储、注册/注销 API、版本管理、执行路由 | K8s Deployment（2 副本），第 10 章 Phase 3 部署 |
+| **Admin UI** | 技能市场前端：技能浏览/搜索、上架审核、订阅/计费管理、技能详情展示 | 平台管理后台的内嵌模块 |
+| **PostgreSQL** | 技能定义持久化存储（`skills` 表），与 Skill Registry 共用 PG 实例 | 已有基础设施 |
+
+### 18.2 技能数据模型
+
+```sql
+-- 技能定义表 (在 ai_platform PG 中)
+CREATE TABLE skills (
+    id              SERIAL PRIMARY KEY,
+    name            TEXT NOT NULL,                 -- 技能唯一名称 (如 track-query)
+    version         TEXT NOT NULL DEFAULT '1.0.0', -- 语义化版本
+    type            TEXT NOT NULL,                 -- mcp_server | api | wasm | code
+    endpoint        TEXT NOT NULL,                 -- mcp://tracking/query 或 http://xxx
+    description     TEXT NOT NULL,                 -- 结构化的调用描述 (LLM 据此判断何时调用)
+    parameters      JSONB NOT NULL DEFAULT '[]',   -- [{name, type, required, description}]
+    output_schema   JSONB,                         -- 输出 JSON Schema
+    industry        TEXT,                          -- logistics | finance | common
+    provider        TEXT,                          -- platform-official | isv | community
+    status          TEXT NOT NULL DEFAULT 'draft', -- draft | review | published | deprecated
+    reviewed_by     TEXT,                          -- 审核人
+    reviewed_at     TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 技能与 Agent 的绑定关系
+CREATE TABLE agent_skills (
+    agent_name      TEXT REFERENCES agents(name),
+    skill_name      TEXT REFERENCES skills(name),
+    required        BOOLEAN DEFAULT false,  -- 是否必需
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (agent_name, skill_name)
+);
+```
+
+### 18.3 技能发布生效流程
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                 技能发布生效流程                                │
+│                                                              │
+│  Step 1: 开发 & 注册                                          │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ 开发者 → Admin UI / CLI:                                │  │
+│  │   $ ai skill create track-query                        │  │
+│  │   → 填写 Skill DSL                                     │  │
+│  │   → POST /skills/register → Skill Registry             │  │
+│  │   → PG INSERT: status = 'draft'                        │  │
+│  │   → 此时只有创建者可见，Agent 看不到                       │  │
+│  └────────────────────────────────────────────────────────┘  │
+│                         │                                     │
+│                         ▼                                     │
+│  Step 2: 测试 & 审核                                          │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ 开发者 → 技能沙箱测试 (Skill Sandbox)                    │  │
+│  │   调用技能端点 → 验证输入/输出符合 Schema                  │  │
+│  │   测试通过 → 提交审核: status = 'review'                 │  │
+│  │                                                       │  │
+│  │ 平台管理员 → 审核:                                       │  │
+│  │   代码安全扫描 → 权限审查 → 数据流向检查 → 通过           │  │
+│  │   → status = 'published'                               │  │
+│  └────────────────────────────────────────────────────────┘  │
+│                         │                                     │
+│                         ▼                                     │
+│  Step 3: 即时生效 (无需重启)                                   │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ 技能状态变为 published → 实时生效                         │  │
+│  │                                                       │  │
+│  │ 生效路径:                                               │  │
+│  │   PG 写入 (published)                                   │  │
+│  │     → Agent 每次推理时实时查询 Skill Registry:           │  │
+│  │         GET /skills?agent=logistics-exception-handler   │  │
+│  │     → Registry 返回该 Agent 绑定的、status=published     │  │
+│  │       的技能的 description 列表                           │  │
+│  │     → 编排引擎将 description 列表注入 LLM Context Window │  │
+│  │       的 Tool Definition 区域                            │  │
+│  │     → LLM 看到的就是当前已发布的最新版本技能列表           │  │
+│  │                                                       │  │
+│  │  关键: 技能 description 不是 Agent 启动时缓存到内存的     │  │
+│  │        静态配置, 而是每次推理时实时查询 Registry 的       │  │
+│  └────────────────────────────────────────────────────────┘  │
+│                         │                                     │
+│                         ▼                                     │
+│  Step 4: 版本迭代 (新版本发布不影响旧 Agent)                    │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ 技能版本管理 (semver):                                   │  │
+│  │                                                       │  │
+│  │   track-query v1.0.0 → v2.0.0 (Breaking Change)       │  │
+│  │                                                       │  │
+│  │   发布 v2.0.0 时:                                       │  │
+│  │     · 新 Agent 创建时默认绑定最新版本                     │  │
+│  │     · 已有 Agent 继续使用绑定的版本 (v1.0.0)，不受影响    │  │
+│  │     · 开发者可手动升级 Agent 的技能绑定:                  │  │
+│  │         PUT /agents/exception-handler/skills/track-query│  │
+│  │         {version: "2.0.0"}                             │  │
+│  │                                                       │  │
+│  │  补丁版本 (v1.0.0 → v1.0.1):                            │  │
+│  │     · 仅修改 description (措辞优化) 或 endpoint (URL变更)│  │
+│  │     · 同一 Major.Minor 下自动生效，所有绑定该技能的 Agent  │  │
+│  │       下次推理时拿到最新 Patch 版本                        │  │
+│  └────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 18.4 技能生效时机——Agent 什么时候拉取技能列表
+
+| 时机 | 频率 | 查询内容 | 说明 |
+|------|------|---------|------|
+| **Agent 定义引用** | Agent 创建/更新时 | Skill Registry 校验技能是否存在、版本是否可用 | 引用不存在的技能 → 创建失败 |
+| **Agent 每次推理** | 每次 `reason` 步骤前 | `GET /skills?agent={name}`→ 返回该 Agent 绑定的、已发布的、当前 Patch 版本的技能 description 列表 | 实时查询，非内存缓存，修改 description 瞬间生效 |
+| **Admin UI 浏览** | 开发者浏览技能市场时 | `GET /skills?status=published&industry=logistics` | 与 Agent 运行时共用同一 Registry |
+
+### 18.5 技能 description 热更新的特殊价值
+
+技能 description 是 LLM 判断"何时调用这个技能"的唯一依据。修改 description 是提升 Agent 准确率最快的手段（不需要重新训练，不需要改代码）：
+
+```
+修改前:
+  description: "查询运单"
+
+修改后:
+  description: |
+    【功能】查询运单实时状态和轨迹
+    【何时调用】用户提供了运单号、或提到了查询运单/快递/物流状态时
+    【何时不调用】仅查询承运商信息(非具体运单)、查询运费/价格时
+    【依赖】需要 tracking_number 参数
+    【输出】status, location, eta, history
+
+修改后下一次 Agent 推理 → LLM 看到新的 description → 调用准确率立即提升。
+
+不需要:
+  · 重启 Agent 服务 ❌
+  · 重新部署 ❌
+  · 修改 Agent DSL ❌
+  · 等待生效 ❌
+```
+
+### 18.6 与 A2A Registry 的边界
+
+| | Skill Registry | A2A Registry |
+|---|---|---|
+| **注册什么** | 单个技能（工具/API） | 整个 Agent |
+| **谁调用** | Agent 编排引擎（每次推理时） | Supervisor Agent（需要委托子任务时） |
+| **发布粒度** | 技能级别 (Skill) | Agent 级别 (Agent Card) |
+| **生效方式** | 每次推理实时查询 | Agent 启动注册 + 心跳 + 超时下线 |
+| **存储** | PG `skills` 表 | PG `a2a_agents` 表（共用 PG 实例） |
+| **独立服务** | ✅ 是（skill-registry Deployment） | ✅ 是（a2a-registry Deployment） |
 
 ---
 
