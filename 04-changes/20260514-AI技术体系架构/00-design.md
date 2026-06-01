@@ -1,8 +1,8 @@
 # AI Agent 平台 (aPaaS) — 多行业 AI 技术体系架构设计方案
 
-**版本**: v2.0
+**版本**: v2.1
 **日期**: 2026-05-14
-**状态**: 设计完成，待审阅。v2.0 新增：Java 技术栈集成方案、Higress 网关接入、Agent Router 两层决策模型与双通道置信度判定
+**状态**: 设计完成，待审阅。v2.1 新增：Prompt Hub 独立服务设计、知识向量与原文存储关系、会话三层存储原理与 recall 决策逻辑
 
 ---
 
@@ -20,6 +20,10 @@
 10. [从零搭建路线图](#10-从零搭建路线图)
 11. [物流运输异常处理 Agent 完整案例](#11-物流运输异常处理-agent-完整案例)
 12. [Agent 执行准确率提升体系](#12-agent-执行准确率提升体系)
+13. [Java 技术栈集成方案](#13-java-技术栈集成方案)
+14. [Prompt Hub 独立服务设计](#14-prompt-hub-独立服务设计)
+15. [知识向量与原文存储关系](#15-知识向量与原文存储关系)
+16. [会话三层存储原理与 Recall 决策逻辑](#16-会话三层存储原理与-recall-决策逻辑)
 13. [Java 技术栈集成方案](#13-java-技术栈集成方案)
 
 ---
@@ -2221,6 +2225,333 @@ Step 2 — 规则校验:
   ❌ 必填槽位 tracking_number 缺失 → multiplier 0.6
 
 Step 3 — 综合: 0.45 × 0.6 = 0.27 < 0.70 → 降级到 general-assistant
+```
+
+---
+
+---
+
+## 14. Prompt Hub 独立服务设计
+
+### 14.1 定位与边界
+
+Prompt Hub 是 AI 能力层的独立服务，与模型网关、RAG 引擎同级部署。它不是 Agent Runtime 的内置配置模块，而是一个**集中管理 Prompt 版本、继承、变量和回归测试的生命周期服务**。
+
+### 14.2 调用时机
+
+Prompt Hub 在两个阶段被调用：
+
+**阶段一：配置期（Agent 创建/更新时）**
+
+```
+开发者 → Admin UI → Prompt Hub API
+  · 创建 Prompt 模板 (POST /prompts)
+  · 版本管理 (Draft → Review → A/B Test → Published → Deprecated)
+  · 设置继承关系 (Base → Industry → Agent)
+  · 配置 A/B 测试 (指定评估集 + 流量比例)
+  · 回滚到历史版本
+```
+
+**阶段二：推理期（Agent 运行时，每次 LLM 推理前）**
+
+```
+Orchestration Engine (Step 4: LLM Reason)
+    │
+    ├── ① POST /prompts/resolve
+    │      {ref: "prompt-logistics-exception-v1",
+    │       variables: {company_name: "XX物流", ...}}
+    │      → Prompt Hub 返回: 填充后的完整 System Prompt (纯文本)
+    │
+    ├── ② POST /retriever/search (并行 → RAG Engine)
+    │      → 返回: Knowledge Context
+    │
+    ├── ③ Redis/Milvus (并行 → Memory Store)
+    │      → 返回: Memory Context
+    │
+    └── ④ 拼入 Context Window:
+           [System Prompt] ← Prompt Hub 返回
+           [Knowledge]     ← RAG 返回
+           [Memory]        ← Memory Store 返回
+           [History + User Message]
+                    ↓
+           POST /v1/chat/completions → Model Gateway → LLM
+```
+
+### 14.3 独立服务的理由
+
+| 如果内置在 Agent Runtime | 独立 Prompt Hub 服务 |
+|---|---|
+| Prompt 版本更新需重启 Agent 服务 | 热更新，零停机 |
+| A/B 测试需在代码里写逻辑 | 集中管理，路由层决定用哪个版本 |
+| 多个 Agent 共享 Prompt 模板时各自维护 | 继承机制 (Base→Industry→Agent)，一处改全局生效 |
+| 回归测试需手动触发 | 发布前自动触发评估集跑分，不通过阻断发布 |
+| Prompt 修改无审计记录 | 每次变更记入审计日志 |
+
+### 14.4 Prompt 解析 API
+
+```python
+# Prompt Hub 核心接口
+class PromptHub:
+    
+    async def resolve(
+        self, 
+        ref: str,           # 如 "prompt-logistics-exception-v1"
+        variables: dict     # 如 {company_name: "XX物流", ...}
+    ) -> str:
+        """解析 Prompt 引用，填充变量，返回完整 System Prompt"""
+        
+        # Step 1: 从 PG 拉取当前生效版本
+        prompt = await self.db.get_prompt(ref)
+        
+        # Step 2: 如果设了 base，递归解析继承链
+        #   如: logistics-exception → logistics-base → platform-base
+        base_content = ""
+        if prompt.base_ref:
+            base_content = await self.resolve(prompt.base_ref, variables)
+        
+        # Step 3: 填充变量 ({{company_name}} → "XX物流")
+        filled = prompt.template
+        for name, value in variables.items():
+            filled = filled.replace(f"{{{{{name}}}}}", str(value))
+        
+        # Step 4: 合并 (base + agent level)
+        return self._merge(base_content, filled)
+```
+
+### 14.5 在调用链路中的位置
+
+```
+Orchestration Engine (编排引擎)
+    │
+    │  Step 4: LLM Reason — 每次推理前:
+    │
+    ├── Prompt Hub      → System Prompt (角色+规则+任务)
+    ├── RAG Engine      → Knowledge Context (SOP/合同/政策原文)
+    ├── Memory Store    → Memory Context (对话历史+用户偏好)
+    │
+    └── 组装 Context Window → Model Gateway → LLM
+```
+
+---
+
+## 15. 知识向量与原文存储关系
+
+### 15.1 核心矛盾
+
+有了知识库向量（Milvus），为什么还要存知识原文（MinIO/S3）？
+
+**向量是索引，不是内容。** 类比一本书——书后的关键词索引页告诉你"第 42 页提到了延迟处理"，但你不能只看索引就知道第 42 页写了什么具体内容。你最终需要翻到第 42 页读原文。
+
+### 15.2 两者分工
+
+```
+检索阶段 (用向量)                    组装阶段 (用原文)
+┌──────────────────┐            ┌──────────────────┐
+│ Query → Embedding│            │ Milvus 返回:      │
+│ → Milvus 搜索     │            │  doc_id="sop-01", │
+│ → 返回: doc_id,  │ ─────────►│ chunk_index=3,    │
+│    chunk_index,   │            │ score=0.94        │
+│    similarity     │            │                   │
+└──────────────────┘            │ 用 doc_id 去 MinIO │
+                                 │ 拉原文:            │
+                                 │ sop-transport.md   │
+                                 │ → 第3段 = "P2级    │
+                                 │ 延迟处理流程..."   │
+                                 │       ↓           │
+                                 │ 拼入 LLM Context   │
+                                 └──────────────────┘
+```
+
+### 15.3 各存储各存什么
+
+| 存储 | 存什么 | 举例 | 用途 |
+|------|--------|------|------|
+| **Milvus (向量库)** | Embedding 向量 + `{doc_id, chunk_index, metadata}` | `[0.23, -0.41, ...]` → `sop-transport.md#chunk-3` | **检索**——找到"哪些文档相关" |
+| **MinIO/S3 (对象存储)** | 原始文档全文 | `sop-transport.md` 全文 / `顺丰合同.pdf` 全文 | **组装**——拿到完整原文拼入 LLM Context Window |
+| **Redis** | 不存知识原文 | 存高频检索缓存和推导结果 | 缓存提速 |
+| **PostgreSQL** | 不存知识原文 | 存文档元数据 (filename, version, updated_at, chunk_count) | 文档管理 |
+
+### 15.4 为什么不能只存向量
+
+1. **LLM 最终需要原文，不是向量** — 你不可能给 LLM 喂 `[0.23, -0.41, 0.87, ...]`
+2. **向量有损压缩** — Embedding 丢失了细节，同一个向量可能对应不同原文
+3. **原文需要审计和回溯** — "Agent 为什么这么回答？" → 查引用原文 → 对象存储拉取
+4. **原文需要被更新** — SOP 改了版本，对象存储覆盖原文，触发 Milvus 重建索引，但向量本身无法"编辑"
+5. **Rerank 需要原文** — Cross-Encoder 精排必须用原文做语义匹配，向量相似度只做粗筛
+
+### 15.5 检索→组装→审计完整链路
+
+```
+用户: "运输延迟了怎么赔？"
+
+Step 1: Embedding Service → Query Vector
+Step 2: Milvus.search() → [{doc_id:"sop-01", chunk:3, score:0.94}, ...]
+Step 3: Rerank (Cross-Encoder) → Top-5 确定
+Step 4: MinIO 拉原文 → sop-transport.md 第3段全文
+Step 5: 拼入 LLM Context Window → 推理
+Step 6: 审计回溯 → 查询 PG 中的 reference 记录 → 再次从 MinIO 拉原文确认
+```
+
+---
+
+## 16. 会话三层存储原理与 Recall 决策逻辑
+
+### 16.1 三种存储各存什么
+
+同一会话的数据被拆成三层存储，各管各的，不存在冗余：
+
+| 存储 | 存什么 | 谁用 | 速度 | 任期 |
+|------|--------|------|------|------|
+| **Redis (会话缓存)** | 当前会话原文（最近20轮对话+skill执行结果） | LLM 构建 Context Window，每次推理必读 | P99 < 2ms | 会话结束+30min 销毁 |
+| **PostgreSQL (会话原文)** | 所有会话完整原文（当前+历史），按 step 逐条存储 | 审计/回溯/合规查询、新会话从历史续接 | P99 < 5ms | 365天 |
+| **Milvus (会话向量索引)** | 只有向量索引 + `{session_id, step_id}` 指针 | 长期记忆检索，找到"哪些历史对话可能相关" | P99 < 10ms | 永久 |
+
+### 16.2 为什么不能只存一种
+
+- **只存 Redis** → 会话结束数据丢失，无法审计，无法跨会话回忆
+- **只存 PG** → 每次构建 Context Window 查 SQL，延迟累积（每秒10+次推理的场景无法接受）
+- **只存 Milvus 向量** → 向量无法还原原文，审计不了，也无法给 LLM 喂真实的对话历史
+
+### 16.3 写入路径（Agent 运行中并行写入）
+
+```
+Agent 每步执行完成:
+
+  ├──→ Kafka (事件流: step_completed, 异步解耦)
+  │
+  ├──→ Redis (同步写，缓存当前会话原文)
+  │     key: session:{id}:context
+  │     value: [{role:"user", content:"..."}, {role:"agent", content:"..."}, ...]
+  │     lpush 最新一轮, ltrim 保留最近20轮
+  │     TTL: 会话结束+30min
+  │
+  ├──→ PostgreSQL (同步写，持久化完整原文)
+  │     INSERT INTO conversations (session_id, step, role, content, timestamp)
+  │     VALUES ('sess-042', 5, 'agent', '延迟4h, 根因=台风...', NOW())
+  │     retention: 365天
+  │
+  └──→ Milvus (仅重要步骤写向量索引，非每步都写)
+        · 决策点（如 Agent 最终方案输出）→ 写
+        · 中间步骤（如 track-query 结果）→ 不写
+        存: {embedding, session_id, step_id}
+        不存: 对话原文
+```
+
+### 16.4 读取路径——Recall 决策逻辑
+
+记忆读取在编排引擎的 `recall` 节点中完成，**不是二选一，而是逐层获取**：
+
+```python
+class RecallNode:
+    """编排引擎 Step 3: Recall Memory"""
+    
+    async def recall(self, state: AgentState) -> AgentState:
+        
+        # ① 读 Redis (每次都读，P99 < 2ms，开销极低)
+        redis_context = await self.redis.get_session_context(state.session_id)
+        # 拿到当前会话最近 20 轮原文
+        state["memory_context"] = redis_context["messages"][-20:]
+        
+        # ② 判断是否读 PG (按需，三种触发条件)
+        should_fetch_history = (
+            self._is_new_session(state)                # 全新会话，需接续上轮
+            or self._has_cross_session_intent(state)    # "上次那个延迟单..."
+            or self._context_insufficient(state)        # LLM判断上下文不够
+        )
+        
+        if should_fetch_history:
+            # ②a: Milvus 语义搜索 → 拿到 {session_id, step_id, similarity}
+            hits = await self.milvus.search(
+                collection="long_term_memory",
+                vector=await self.embed(state["user_query"]),
+                top_k=3
+            )
+            
+            # ②b: 用 session_id + step_id 去 PG 拿原文
+            for hit in hits:
+                content = await self.pg.query("""
+                    SELECT content FROM conversations
+                    WHERE session_id = ? AND step_id = ?
+                """, (hit["session_id"], hit["step_id"]))
+                
+                state["long_term_context"].append({
+                    "content": content,
+                    "similarity": hit["similarity"]
+                })
+        
+        # ②c: 如果是全新会话但同一用户 → 从 PG 取上轮最后10轮接续
+        if self._is_new_session(state):
+            prev_session = await self.pg.get_last_session(state.user_id)
+            if prev_session:
+                state["memory_context"].extend(
+                    prev_session["messages"][-10:]
+                )
+        
+        return state
+    
+    def _is_new_session(self, state) -> bool:
+        """当前会话 Redis 为空，是全新会话"""
+        return len(state.get("memory_context", [])) == 0
+    
+    def _has_cross_session_intent(self, state) -> bool:
+        """用户 Query 触发了跨会话回忆意图"""
+        cross_session_keywords = [
+            "上次", "之前", "上一次", "那天", "前两天",
+            "上次那个", "跟上次一样", "还是一样的"
+        ]
+        query = state["user_query"]
+        return any(kw in query for kw in cross_session_keywords)
+    
+    def _context_insufficient(self, state) -> bool:
+        """LLM 判断当前上下文是否足够"""
+        # 在 LLM Reason 中设置标记:
+        # if current_confidence < 0.7:
+        #     state["context_insufficient"] = True
+        return state.get("context_insufficient", False)
+```
+
+### 16.5 不读 PG 的情况
+
+| 场景 | 原因 |
+|------|------|
+| Redis 已有充足上下文 (最近20轮) | 开销低，无需查 PG |
+| 简单查询 ("查下运单 SF789") | 不需要历史上下文 |
+| 新用户首问，无其他 session | PG 里没有可读的 |
+| 同一会话的前几轮 | Redis 已缓存，上下文在滑动窗口内 |
+
+### 16.6 各来源取多少
+
+| 来源 | 取什么 | 取多少 | 条件 |
+|------|--------|--------|------|
+| **Redis** | 当前会话原文 + skill 结果 | 最近 20 轮 | **每次都读** |
+| **PG + Milvus** | 历史相似会话原文 | Top-3 个 Step 的原文 | Query 触发跨会话回忆 |
+| **PG (上轮续接)** | 上轮会话最后 N 轮 | 最近 10 轮 | 新会话且无 Redis 缓存 |
+
+### 16.7 完整数据流示例
+
+```
+用户: "上次那个延迟单最后怎么处理的？"
+
+Step 3 — Recall:
+
+  ① Redis: 当前会话第1轮，无历史 → 空
+  
+  ② 触发条件2 (跨会话回忆):
+     Query → Embedding → Milvus.search() → 
+       [ {session_id:"sess-042", step_id:8, similarity:0.91},
+         {session_id:"sess-038", step_id:5, similarity:0.85} ]
+  
+  ③ 用指针去 PG 拉原文:
+     SELECT content FROM conversations
+     WHERE session_id='sess-042' AND step_id=8
+     → "运单SF123因台风延迟4h,最终方案:通知客户+赔偿运费30%=45元"
+  
+  ④ 原文注入 LLM Context Window 的 Memory Context 区域:
+     [System Prompt] ← Prompt Hub
+     [Knowledge]     ← RAG (相关SOP)
+     [Memory]        ← ④的原文: "上次延迟单处理结果..."
+     [History]       ← 当前对话
+     [User Message]  ← "上次那个延迟单最后怎么处理的？"
 ```
 
 ---
