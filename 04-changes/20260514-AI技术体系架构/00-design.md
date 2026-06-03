@@ -1,8 +1,8 @@
 # AI Agent 平台 (aPaaS) — 多行业 AI 技术体系架构设计方案
 
-**版本**: v2.3
+**版本**: v2.4
 **日期**: 2026-05-14
-**状态**: 设计完成，待审阅。v2.3 新增：技能市场服务边界与发布生效机制
+**状态**: 设计完成，待审阅。v2.4 新增：Redis会话缓存与客户端区别、Skill执行结果缓存详细设计、Skill术语澄清
 
 ---
 
@@ -2553,9 +2553,177 @@ Step 3 — Recall:
 
 ---
 
+### 16.8 Redis 会话缓存 vs 客户端对话历史——为什么客户端有数据还需要 Redis
+
+**客户端与 Redis 存的不是同一份数据，用途也不同。**
+
+**客户端本地有的：** 用户看到的对话气泡——纯文本展示内容。
+
+```
+客户端看到的:
+  User: "SF123延迟了帮我处理"
+  Agent: "检测到延迟4h，预计明天10点送达，建议通知客户并按合同赔偿运费30%。"
+```
+
+**Redis 存的是编排引擎内部状态：**
+
+```
+Redis 存的 (客户端看不到这些):
+  session:sess-042:context
+  ├── Step 1: intent={type:delay, confidence:0.92, severity:P2}
+  ├── Step 2: knowledge_chunks=5
+  ├── Step 3: memory_hits=0
+  ├── Step 4: llm_reason_output="TOOL_CALL:track-query(SF123)"
+  ├── Step 5: skill_result={status:delayed, eta:"明天10:00", root:"台风"}
+  ├── Step 6: llm_reason_output="TOOL_CALL:carrier-sla-lookup"
+  ├── Step 7: skill_result={penalty:"运费30%"}
+  └── Step 8: llm_reason_output="组装方案:通知客户+赔偿45元"
+```
+
+**为什么客户端不能替代 Redis：**
+
+| | 客户端 | Redis |
+|---|---|---|
+| **有什么** | 只有最终对话气泡 | agent 内部推理链 + skill 调用结果 + 中间状态 |
+| **谁用** | 用户看 | 编排引擎推理用 |
+| **时效** | 每次用户发来的只有新消息 | 编排引擎随时读/写 |
+
+1. **编排引擎的多步循环在服务端完成**——客户端只看到起点的用户输入和终点的回复，中间步骤全部在编排引擎内部。客户端不知道 Step 5 调了 `track-query`，也不知道它返回了什么数据。
+
+2. **Agent 是多步推理循环**——第二步 LLM 推理需要看到第一步 Skill 的返回结果。如果每次都要客户端回传，客户端根本没有这些中间数据。
+
+3. **K8s 多副本共享状态**——Agent Runtime 有多个 Pod，同一会话的不同请求可能路由到不同 Pod，必须有一个共享的"工作台"存放当前会话的编排状态。Redis 就是那个共享工作台。
+
+4. **客户端只发最新消息**——用户每次只发一条新消息（如 "SF123延迟了"），Agent 编排引擎需要从 Redis 拉取"这条消息之前的所有上下文"来构建 LLM Context Window。
+
 ---
 
-## 17. A2A 协议与 Agent 自动发现
+### 16.9 Skill 执行结果缓存详细设计
+
+#### 16.9.1 缓存内容
+
+以物流异常处理 Agent 为例，Redis 中存储的 skill 执行结果：
+
+```json
+// Redis Hash: session:sess-042:skill_results
+{
+  "track-query": {
+    "called_at_step": 5,
+    "request": {"tracking_number": "SF1234567890"},
+    "response": {
+      "status": "delayed",
+      "delayed_duration": "4h15m",
+      "current_location": "杭州中转站",
+      "estimated_arrival": "2026-05-15T10:00:00",
+      "weather_alert": "台风预警",
+      "history": [
+        {"time": "05-14T08:00", "location": "上海集散中心", "status": "已揽收"},
+        {"time": "05-14T14:00", "location": "杭州中转站", "status": "中转"}
+      ]
+    },
+    "duration_ms": 320,
+    "success": true
+  },
+  "abnormal-detection": {
+    "called_at_step": 7,
+    "request": {"tracking_number": "SF1234567890"},
+    "response": {
+      "is_abnormal": true,
+      "type": "weather_delay",
+      "root_cause": "台风艾云尼影响杭州段封路",
+      "confidence": 0.95,
+      "severity": "P2"
+    },
+    "duration_ms": 280,
+    "success": true
+  },
+  "carrier-sla-lookup": {
+    "called_at_step": 7,
+    "request": {"carrier_id": "SF"},
+    "response": {
+      "carrier": "顺丰速运",
+      "promised_eta": 24,
+      "actual_elapsed": 28,
+      "breach": true,
+      "penalty_clause": "延迟>3h赔偿运费30%",
+      "compensation_rate": 0.3,
+      "max_penalty": 200
+    },
+    "duration_ms": 450,
+    "success": true
+  }
+}
+```
+
+#### 16.9.2 触发时机
+
+在编排引擎的 `execute_skill` 步骤中，skill 调用完成、拿到返回结果后，**立即同步写入 Redis**（在进入下一个 `reason` 步骤之前）。
+
+```python
+# orchestrator.py — execute_skill 节点
+async def execute_skill(self, state: AgentState) -> AgentState:
+    skill_name = state["pending_skill"]
+    skill_args = state["pending_skill_args"]
+    
+    # ① 调用 Skill Registry 执行技能
+    result = await self.skill_registry.invoke(skill_name, skill_args)
+    
+    # ② 立即写入 Redis（同步写，确保下一个 reason 步骤能读到）
+    await self.redis.hset(
+        f"session:{state.session_id}:skill_results",
+        skill_name,
+        json.dumps({
+            "called_at_step": state["current_step"],
+            "request": skill_args,
+            "response": result,
+            "duration_ms": elapsed_ms,
+            "success": True
+        })
+    )
+    
+    # ③ 更新 Agent 内部状态
+    state["skill_calls"].append({"skill": skill_name, "result": result})
+    return state
+```
+
+#### 16.9.3 缓存后的用途
+
+| 用途 | 说明 | 时机 |
+|------|------|------|
+| **注入下一次 LLM 推理** | 下一步 `reason` 时，从 Redis 读取所有已执行的 skill 结果，拼入 Context Window 的 `[Skill Results]` 区域。LLM 看到 "我已经查过运单了，状态是 delayed，根因是台风"，就不会重复调用 `track-query` | 每次 `reason` 步骤前 |
+| **防止重复调用** | 编排引擎在 LC 决定调用某个 skill 之前，先检查 Redis——这个 skill 在当前会话已经被调用过了吗？如果是且 TTL 内，直接用缓存结果，不重复调远端 API | 每次 `reason` 步骤输出 TOOL_CALL 后、实际执行前 |
+| **最终响应组装** | `respond` 步骤从 Redis 拉全部 skill 结果，用于生成最终的可读回复 | 会话结束时 |
+| **审计落盘** | TTL 过期前，异步将 Redis 中的 skill 结果刷入 PG `conversations` 表的对应 step 记录中 | TTL 过期前 |
+
+---
+
+### 16.10 Prompt 与 Agent 的绑定关系
+
+Prompt 通过 Agent DSL 中的 `prompt.ref` 字段与 Agent 绑定：
+
+```yaml
+# Agent 定义
+spec:
+  prompt:
+    ref: prompt-logistics-exception-v1   # ← 绑定关系
+```
+
+**运行时流程：**
+
+```
+编排引擎收到请求: "调用 logistics-exception-handler"
+
+  → 读取 Agent 定义 → 拿到 prompt.ref = "prompt-logistics-exception-v1"
+  → POST /prompts/resolve {ref: "prompt-logistics-exception-v1", variables: {...}}
+  → Prompt Hub:
+      1. 从 PG 查该 ref 的当前生效版本 (status=published)
+      2. 检查 base 继承链 → 递归解析多层 Prompt
+      3. 填充变量 ({{company_name}} → "XX物流")
+      4. 返回完整 System Prompt 纯文本
+  → 拼入 Context Window → 调用 LLM
+```
+
+**每次推理都重新拉取，不是 Agent 启动时加载到内存。** 改了 Prompt 模板内容，下一次推理立刻生效，无需重启 Agent。
 
 ### 17.1 协议选型与背景
 
@@ -3125,6 +3293,27 @@ CREATE TABLE agent_skills (
 | **生效方式** | 每次推理实时查询 | Agent 启动注册 + 心跳 + 超时下线 |
 | **存储** | PG `skills` 表 | PG `a2a_agents` 表（共用 PG 实例） |
 | **独立服务** | ✅ 是（skill-registry Deployment） | ✅ 是（a2a-registry Deployment） |
+
+### 18.7 Skill 术语澄清——本平台 Skill 与 AI 编码助手 Skill 的区别
+
+本平台中的 "Skill" 与 Claude Code 等 AI 编码助手中的 "Skill" 是同名异义，本质不同：
+
+| | Claude Code "Skill" | AI Agent 平台 "Skill" |
+|---|---|---|
+| **本质** | 指令注入（Prompt Template） | 外部 API 调用（Tool） |
+| **作用** | 告诉 AI **怎么想** | 让 AI **怎么做** |
+| **加载方式** | 注入 System Prompt，影响推理行为 | 通过 MCP / REST API / gRPC 远程调用 |
+| **执行结果** | 改变 AI 的推理策略和行为规范 | 获取外部数据或执行外部动作 |
+| **示例** | `harness-brainstorming` → "遵循9步设计流程" | `track-query` → 调用 TMS API 查运单 |
+| **在本平台的对应** | **Prompt Template**（存在 Prompt Hub） | **Skill**（存在 Skill Registry） |
+
+具体到物流异常处理 Agent：
+
+- **Prompt Template 负责 "怎么想"**： "你是物流异常处理专家。识别五类异常并按 P1/P2/P3 分级..."
+
+- **Skill 负责 "怎么做"**： `track-query` 调 TMS 查运单、`customer-notify` 调通知服务发短信、`carrier-sla-lookup` 调查承运商合同
+
+本方案沿用了业界通用术语（Manhattan Agent Foundry、Google A2A 协议均使用 "Skill" 指代 Agent 可调用的工具能力），但应注意与 AI 编码助手生态的 Skill 概念区分。
 
 ---
 
