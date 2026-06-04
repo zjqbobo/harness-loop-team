@@ -1,8 +1,8 @@
 # AI Agent 平台 (aPaaS) — 多行业 AI 技术体系架构设计方案
 
-**版本**: v2.5
+**版本**: v2.6
 **日期**: 2026-05-14
-**状态**: 设计完成，待审阅。v2.5 新增：安全权限详细设计（认证/鉴权/API安全/AI安全护栏/数据安全/审计追溯/安全运营）
+**状态**: 设计完成，待审阅。v2.6 新增：Agent 执行护栏机制（操作白名单/黑名单、人工确认规则、敏感词/正则过滤、动态熔断）
 
 ---
 
@@ -1009,6 +1009,451 @@ class HallucinationDetector:
             "action": "warn" if hallucination_rate > 0.3 else "none",
             "should_trigger_hitl": hallucination_rate > 0.5
         }
+```
+
+### 7.5.4 Agent 执行护栏 (Execution Guardrails)
+
+> **定位区别：** §7.5.1-7.5.3 的 LLM Firewall 管的是**输入输出的内容安全**（用户说了什么、LLM 回了什么）。执行护栏管的是**Agent 推理出"要调某个 Skill"之后，在真正执行之前，拦截危险操作**。两者在调用链上是前后衔接的。
+
+```
+用户输入
+    │
+    ▼
+LLM Firewall (输入护栏)        ← §7.5.1-7.5.3: 内容安全
+    │
+    ▼
+编排引擎 → LLM 推理 → TOOL_CALL
+    │
+    ▼
+Agent 执行护栏 ←─────────────── 本节: 执行安全
+    │ (LLM 决定了要调用哪个 Skill)
+    ├── ① 操作白名单/黑名单
+    ├── ② 敏感词/正则过滤
+    ├── ③ 人工确认规则
+    └── ④ 动态熔断
+    │
+    ▼ (通过)
+Skill Executor → 真正执行
+```
+
+#### 7.5.4.1 四层执行护栏总览
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                Agent 执行护栏 (四层)                              │
+│                                                                 │
+│  编排引擎输出 TOOL_CALL 后，真正执行前:                            │
+│                                                                 │
+│  Layer 1: 操作白名单/黑名单                                       │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ 声明式规则: 哪些 Skill/操作允许，哪些禁止                     │  │
+│  │ 例: delete_order → blocked, claim_init → allowed_if(amount<1000)│
+│  │ 命中 blacklist → 直接阻断，不进入后续护栏                     │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                         │                                       │
+│  Layer 2: 敏感词/正则过滤                                        │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ 检查 Skill 参数中是否包含敏感内容                             │  │
+│  │ 例: 参数包含 DROP TABLE / rm -rf / 内部域名 / 外部邮箱       │  │
+│  │ 命中 → 阻断 + 告警                                          │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                         │                                       │
+│  Layer 3: 人工确认规则 (HITL)                                    │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ 可配置哪些操作必须人工确认后才执行                             │  │
+│  │ 例: amount>5000 / action=cancel_order / skill=delete_*     │  │
+│  │ 命中 → 挂起等待人工审批                                     │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                         │                                       │
+│  Layer 4: 动态熔断                                               │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ 实时监控异常模式: 短时间大量调用 / 异常参数组合               │  │
+│  │ 触发 → 自动降级 (切换到 safe mode) 或暂停 Agent              │  │
+│  └───────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 7.5.4.2 操作白名单/黑名单
+
+```yaml
+# agent-guardrails.yaml — 每个 Agent 可独立配置
+agent: logistics-exception-handler
+
+execution_policy:
+  # === 白名单模式: 仅允许列表中的操作 ===
+  # 适用于安全敏感 Agent (如财务/合规)
+  mode: blacklist   # whitelist | blacklist
+  
+  # === 黑名单: 禁止的操作 ===
+  blacklist:
+    - skill: delete_order       # 禁止删除订单
+      reason: "订单删除不可逆, 需人工操作"
+    
+    - skill: modify_payment     # 禁止修改付款信息
+      reason: "付款信息修改需财务审批"
+    
+    - skill: send_external_email
+      params:
+        recipient_domain_whitelist: ["@company.com"]  # 仅允许发送到公司域名
+      reason: "禁止向外部邮箱发送邮件"
+    
+    - skill: claim_init         # 允许但有限制
+      params:
+        max_amount: 1000        # 理赔金额上限
+      reason: "超过1000元的理赔需人工处理"
+  
+  # === 按行业叠加规则 ===
+  industry_overrides:
+    finance:                     # 金融行业额外规则
+      blacklist:
+        - skill: modify_credit_rating
+        - skill: bypass_compliance_check
+```
+
+```python
+class ExecutionPolicyEngine:
+    """执行策略引擎 — 每次 TOOL_CALL 前调用"""
+    
+    async def check(self, skill_name: str, params: dict, 
+                    agent_config: dict, context: dict) -> PolicyResult:
+        
+        policy = agent_config.get("execution_policy", {})
+        mode = policy.get("mode", "blacklist")
+        
+        # === Layer 1: 白名单/黑名单检查 ===
+        if mode == "whitelist":
+            # 白名单模式: skill 必须在白名单中
+            whitelist = [item["skill"] for item in policy.get("whitelist", [])]
+            if skill_name not in whitelist:
+                return PolicyResult(
+                    allowed=False,
+                    reason=f"Skill '{skill_name}' not in whitelist",
+                    action="block"
+                )
+        
+        # 黑名单检查
+        for rule in policy.get("blacklist", []):
+            if rule["skill"] == skill_name:
+                # 检查参数限制
+                if "params" in rule:
+                    for param_name, constraint in rule["params"].items():
+                        actual = params.get(param_name)
+                        if isinstance(constraint, dict):
+                            # max_amount 检查
+                            if "max_amount" in constraint:
+                                if actual and actual > constraint["max_amount"]:
+                                    return PolicyResult(
+                                        allowed=False,
+                                        reason=f"{rule['reason']}: {param_name}={actual} > max={constraint['max_amount']}",
+                                        action="require_approval",
+                                        escalation_level="P2"
+                                    )
+                            # domain whitelist 检查
+                            if "recipient_domain_whitelist" in constraint:
+                                if actual and not any(actual.endswith(d) for d in constraint["recipient_domain_whitelist"]):
+                                    return PolicyResult(
+                                        allowed=False,
+                                        reason=f"{rule['reason']}: domain not in whitelist",
+                                        action="block"
+                                    )
+                        elif isinstance(constraint, list):
+                            if actual not in constraint:
+                                return PolicyResult(
+                                    allowed=False,
+                                    reason=f"{rule['reason']}: {param_name} not in allowed values",
+                                    action="block"
+                                )
+                
+                # 无条件禁止
+                if "params" not in rule:
+                    return PolicyResult(
+                        allowed=False,
+                        reason=rule["reason"],
+                        action="block"
+                    )
+        
+        return PolicyResult(allowed=True)
+```
+
+#### 7.5.4.3 敏感词/正则过滤
+
+```python
+class SensitiveContentFilter:
+    """检查 Skill 调用参数中是否包含敏感内容"""
+    
+    # 高危模式——命中直接阻断
+    CRITICAL_PATTERNS = [
+        # SQL 注入
+        (r"(?i)(DROP\s+TABLE|DELETE\s+FROM|TRUNCATE\s+TABLE|ALTER\s+TABLE)", 
+         "疑似 SQL 注入"),
+        # 命令注入
+        (r"(?i)(rm\s+-rf|sudo\s+|curl\s+.*\|.*sh|wget\s+.*-O\s+/tmp)",
+         "疑似命令注入"),
+        # 路径遍历
+        (r"(\.\.\/){2,}|(\.\.\\){2,}",
+         "路径遍历攻击"),
+        # 内部地址泄露
+        (r"(10\.\d{1,3}|172\.(1[6-9]|2\d|3[01])|192\.168)\.\d{1,3}\.\d{1,3}",
+         "内部 IP 地址"),
+        # 数据库连接串
+        (r"(?i)(jdbc:|mongodb://|redis://|postgresql://)",
+         "数据库连接串泄露"),
+    ]
+    
+    # 告警模式——不阻断但告警
+    WARNING_PATTERNS = [
+        # 外部邮箱
+        (r"@(?!company\.com)[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
+         "发送到外部邮箱"),
+        # 大量金额
+        (r"金额.*?(\d{5,})|amount.*?(\d{5,})",
+         "涉及大额金额"),
+        # 敏感文件路径
+        (r"(?i)(/etc/passwd|/etc/shadow|~/.ssh|/root/)",
+         "敏感文件路径"),
+    ]
+    
+    def check(self, skill_name: str, params: dict) -> FilterResult:
+        """检查 Skill 参数"""
+        params_str = json.dumps(params, ensure_ascii=False)
+        
+        # 高危检查
+        for pattern, reason in self.CRITICAL_PATTERNS:
+            match = re.search(pattern, params_str)
+            if match:
+                return FilterResult(
+                    passed=False,
+                    action="block",
+                    reason=f"{reason}: 匹配 '{match.group()}'"
+                )
+        
+        # 告警检查
+        warnings = []
+        for pattern, reason in self.WARNING_PATTERNS:
+            match = re.search(pattern, params_str)
+            if match:
+                warnings.append({
+                    "pattern": reason,
+                    "matched": match.group()
+                })
+        
+        return FilterResult(
+            passed=True,
+            warnings=warnings,
+            action="warn" if warnings else "pass"
+        )
+```
+
+#### 7.5.4.4 人工确认规则 (HITL)
+
+```yaml
+# hitl-rules.yaml — 可配置的人工确认规则
+agent: logistics-exception-handler
+
+hitl_rules:
+  # === 按操作类型 ===
+  by_action:
+    - action: cancel_order
+      always_require_approval: true
+      approval_message: "Agent 请求取消订单 {{order_id}}，请确认"
+    
+    - action: initiate_claim
+      condition: "amount > 1000"
+      approval_message: "Agent 请求发起理赔 {{amount}} 元，请确认"
+    
+    - action: modify_delivery_address
+      always_require_approval: true
+  
+  # === 按金额阈值 ===
+  by_amount:
+    - threshold: 5000
+      currency: CNY
+      scope: any_action           # 任何涉及此金额的操作
+  
+  # === 按置信度 ===
+  by_confidence:
+    - threshold: 0.75             # Agent 自信度 < 0.75 → 审批
+    - threshold: 0.85
+      condition: "involves_compensation"  # 涉及赔偿时阈值提高
+  
+  # === 按异常等级 ===
+  by_severity:
+    - level: P1                   # P1 严重异常 → 始终审批
+    - level: P2
+      condition: "involves_compensation"
+  
+  # === 按客户等级 ===
+  by_customer_tier:
+    - tier: VIP                   # VIP 客户 → 所有操作审批
+    - tier: KEY_ACCOUNT
+      condition: "amount > 1000"
+  
+  # === 审批超时策略 ===
+  approval_timeout:
+    default: 3600                  # 默认 1 小时
+    by_severity:
+      P1: 1800                     # P1 严重异常: 30 分钟
+      P2: 3600
+      P3: 7200                     # P3 轻微: 2 小时
+    on_timeout: auto_reject        # auto_reject | auto_approve | escalate
+```
+
+```python
+class HITLEngine:
+    """人工确认引擎"""
+    
+    async def check(self, skill_name: str, params: dict, 
+                    context: dict) -> HITLDecision:
+        
+        rules = await self.db.get_hitl_rules(context["agent_name"])
+        
+        checks = []
+        
+        # 按操作类型
+        for rule in rules.get("by_action", []):
+            if rule["action"] == skill_name:
+                if rule.get("always_require_approval"):
+                    checks.append(HITLCheck(
+                        trigger="by_action",
+                        reason=f"{skill_name} 必须人工审批",
+                        message=rule.get("approval_message", "").format(**params)
+                    ))
+                elif rule.get("condition"):
+                    if self._eval_condition(rule["condition"], params, context):
+                        checks.append(HITLCheck(
+                            trigger="by_action",
+                            reason=f"{skill_name} 满足条件: {rule['condition']}"
+                        ))
+        
+        # 按金额
+        for rule in rules.get("by_amount", []):
+            amount = self._extract_amount(params)
+            if amount and amount > rule["threshold"]:
+                checks.append(HITLCheck(
+                    trigger="by_amount",
+                    reason=f"金额 {amount} > {rule['threshold']}"
+                ))
+        
+        # 按置信度
+        for rule in rules.get("by_confidence", []):
+            agent_confidence = context.get("confidence", 1.0)
+            if agent_confidence < rule["threshold"]:
+                checks.append(HITLCheck(
+                    trigger="by_confidence",
+                    reason=f"置信度 {agent_confidence} < {rule['threshold']}"
+                ))
+        
+        # 按客户等级
+        customer_tier = context.get("user_tier", "NORMAL")
+        for rule in rules.get("by_customer_tier", []):
+            if customer_tier == rule["tier"]:
+                checks.append(HITLCheck(
+                    trigger="by_customer_tier",
+                    reason=f"客户等级 {customer_tier}"
+                ))
+        
+        if checks:
+            return HITLDecision(
+                requires_approval=True,
+                checks=checks,
+                timeout=self._get_timeout(rules, context)
+            )
+        
+        return HITLDecision(requires_approval=False)
+```
+
+#### 7.5.4.5 动态熔断
+
+```python
+class CircuitBreaker:
+    """异常模式检测 + 自动熔断"""
+    
+    def __init__(self):
+        self.redis = RedisClient()
+        self.window = 300  # 5 分钟窗口
+    
+    async def check(self, agent_name: str, skill_name: str, 
+                    tenant_id: str) -> BreakerResult:
+        
+        # 指标1: 同 Agent 同 Skill 调用频率
+        key = f"cb:{tenant_id}:{agent_name}:{skill_name}:count"
+        count = await self.redis.incr(key)
+        await self.redis.expire(key, self.window)
+        
+        if count > 50:  # 5 分钟内同一 Skill 调用超 50 次
+            return BreakerResult(
+                action="throttle",
+                reason=f"Skill '{skill_name}' 调用频率异常: {count}次/{self.window}s"
+            )
+        
+        # 指标2: 连续被护栏拒绝
+        block_key = f"cb:{tenant_id}:{agent_name}:blocked"
+        blocked_count = await self.redis.get(block_key) or 0
+        
+        if int(blocked_count) > 10:  # 连续 10 次被拒绝
+            return BreakerResult(
+                action="suspend_agent",
+                reason=f"Agent '{agent_name}' 连续 {blocked_count} 次操作被护栏拦截, 自动暂停"
+            )
+        
+        # 指标3: 异常参数模式 (如短时间内发送到不同外部邮箱)
+        # 指标4: Token 消耗异常飙升
+        
+        return BreakerResult(action="pass")
+    
+    async def record_block(self, agent_name: str, tenant_id: str):
+        """记录一次拦截"""
+        key = f"cb:{tenant_id}:{agent_name}:blocked"
+        await self.redis.incr(key)
+        await self.redis.expire(key, self.window)
+```
+
+#### 7.5.4.6 四层护栏执行流程
+
+```python
+# orchestrator.py — execute_skill 节点中的护栏调用
+async def execute_skill_with_guardrails(self, state: AgentState) -> AgentState:
+    skill_name = state["pending_skill"]
+    skill_params = state["pending_skill_params"]
+    agent_config = state["agent_config"]
+    
+    # === Layer 1: 操作白名单/黑名单 ===
+    policy_result = await self.execution_policy.check(
+        skill_name, skill_params, agent_config, state
+    )
+    if not policy_result.allowed:
+        if policy_result.action == "block":
+            await self.circuit_breaker.record_block(state["agent_name"], state["tenant_id"])
+            return self._respond_blocked(state, policy_result.reason)
+        if policy_result.action == "require_approval":
+            state["pending_approval"] = policy_result
+            return await self.human_approval(state)
+    
+    # === Layer 2: 敏感词/正则过滤 ===
+    filter_result = self.sensitive_filter.check(skill_name, skill_params)
+    if not filter_result.passed:
+        await self.circuit_breaker.record_block(state["agent_name"], state["tenant_id"])
+        return self._respond_blocked(state, filter_result.reason)
+    
+    # === Layer 3: 人工确认规则 ===
+    hitl_decision = await self.hitl_engine.check(skill_name, skill_params, state)
+    if hitl_decision.requires_approval:
+        state["pending_approval"] = hitl_decision
+        return await self.human_approval(state)
+    
+    # === Layer 4: 动态熔断 ===
+    breaker_result = await self.circuit_breaker.check(
+        state["agent_name"], skill_name, state["tenant_id"]
+    )
+    if breaker_result.action == "throttle":
+        return self._respond_throttled(state, breaker_result.reason)
+    if breaker_result.action == "suspend_agent":
+        await self._suspend_agent(state["agent_name"], breaker_result.reason)
+        return self._respond_suspended(state, breaker_result.reason)
+    
+    # === 全部通过 → 真正执行 ===
+    result = await self.skill_registry.invoke(skill_name, skill_params)
+    return result
 ```
 
 ### 7.6 数据安全
