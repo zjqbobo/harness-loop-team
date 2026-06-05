@@ -1,8 +1,8 @@
 # AI Agent 平台 (aPaaS) — 多行业 AI 技术体系架构设计方案
 
-**版本**: v2.10
+**版本**: v2.11
 **日期**: 2026-06-04
-**状态**: 设计完成，待审阅。v2.10 新增：知识库构建业界开源项目选型、知识图谱构建业界开源项目选型
+**状态**: 设计完成，待审阅。v2.11 新增：请求路由两层分工（Higress→Java后端→Agent Router）
 
 ---
 
@@ -4685,17 +4685,53 @@ spec:
       weight: 10
 ```
 
-### 13.5 Agent Router：两层决策模型与双通道置信度判定
+### 13.5 Agent Router：Agent 网关与两层决策模型
 
-#### 13.5.1 决策位置
+#### 13.5.1 Agent Router 的定位——是 Agent 网关，不是业务网关
 
-Agent Router 在 API Gateway 之后、Agent 编排引擎之前：
+Agent Router 本质上是一个 **Agent 网关**——它不决定"这个请求是不是要走 Agent"，只决定"走哪个 Agent"。
+
+"是不是要走 Agent"这个决定在更上游就做出了：
+
+```
+请求进来:
+
+  Higress Gateway (统一入口)
+      │
+      ├── /api/orders/list       → Java 后端 → 直接查数据库返回 (不走 Agent)
+      ├── /api/orders/create     → Java 后端 → 业务逻辑处理 (不走 Agent)
+      ├── /api/shipment/track    → Java 后端 → 调 TMS API 返回 (不走 Agent)
+      │
+      └── /api/exception/handle  → Java 后端 → 判断"这个需要 AI 处理"
+                                       │
+                                       ▼
+                                  AgentClient.runAgent(...)
+                                       │
+                                       ▼
+                                  Agent Router (Agent 网关)
+                                       │
+                                  "这是异常处理 → logistics-exception-handler"
+```
+
+**两层路由的分工：**
+
+| 在哪层 | 谁决定 | 决定什么 | 依据 |
+|--------|--------|---------|------|
+| **Higress** | URL 路径匹配 | 这个请求发给 Java 后端还是直接发给 Agent 服务？ | `/api/*` → Java 后端；`/agents/*` → Agent Router（如果外部直接调 Agent API） |
+| **Java 后端** | 业务代码 | 这个业务操作需不需要调用 AI？ | 业务逻辑判断——异常处理需要 AI，查列表不需要 |
+| **Agent Router** | 意图分类模型 | 需要哪个 Agent 来处理？ | 用户 Query 的语义 + 可用 Agent 列表 |
+
+**所以 Agent Router 管的是 Agent 之间的路由（哪个 Agent），不管业务请求和 Agent 请求的分流。分流是 Java 后端在业务代码里做的。**
+
+#### 13.5.2 决策位置
+
+Agent Router 在 Higress Gateway 之后、Agent 编排引擎之前：
 
 ```
 用户请求 → Java后端(鉴权) → Higress(安全+限流) → Agent Router(决策) → Agent编排引擎(执行)
 ```
 
-#### 13.5.2 两层决策模型
+#### 13.5.3 两层决策模型
 
 | 层级 | 负责 | 输入 | 输出 |
 |------|------|------|------|
@@ -4759,7 +4795,7 @@ class AgentRouter:
         return {"multiplier": multiplier, "checks": checks}
 ```
 
-#### 13.5.3 置信度判定：双通道机制
+#### 13.5.4 置信度判定：双通道机制
 
 **通道一：模型 self-confidence（语义匹配——模糊判断）**
 
