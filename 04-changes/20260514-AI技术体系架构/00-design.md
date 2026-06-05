@@ -1,8 +1,8 @@
 # AI Agent 平台 (aPaaS) — 多行业 AI 技术体系架构设计方案
 
-**版本**: v2.6
-**日期**: 2026-05-14
-**状态**: 设计完成，待审阅。v2.6 新增：Agent 执行护栏机制（操作白名单/黑名单、人工确认规则、敏感词/正则过滤、动态熔断）
+**版本**: v2.7
+**日期**: 2026-06-04
+**状态**: 设计完成，待审阅。v2.7 新增：GPU 推理集群详细设计（软件栈/模型管理/调度路由/弹性伸缩/监控/高可用）
 
 ---
 
@@ -119,6 +119,8 @@
 
 ### 3.2 GPU 推理集群
 
+#### 3.2.1 总览
+
 ![GPU 推理集群调度架构](images/fw-arch-04-gpu-cluster.png)
 
 | 能力 | 设计 | 说明 |
@@ -128,6 +130,582 @@
 | **优先级抢占** | 在线推理 > 离线评估 > 模型训练 | 保障生产 SLA，离线任务填充空闲算力 |
 | **弹性伸缩** | HPA 基于队列深度 + GPU 利用率 | 最小 0（无请求零成本），最大配额内自动扩 |
 | **异构支持** | NVIDIA + 国产芯片（昇腾/寒武纪） | 信创合规客户可选国产芯片池 |
+
+#### 3.2.2 GPU 集群软件栈——裸机之上的每一层
+
+GPU 物理机器到可对外提供推理服务，中间需要部署多层软件：
+
+```
+Layer 6: 推理服务 API (OpenAI 兼容 /v1/chat/completions)
+         ↑
+Layer 5: 推理引擎 (vLLM / TGI / TensorRT-LLM / Triton Server)
+         ↑
+Layer 4: 模型管理器 (Model Manager — 加载/卸载/版本切换/缓存)
+         ↑
+Layer 3: K8s GPU Operator (Device Plugin + DCGM + GPU Feature Discovery)
+         ↑
+Layer 2: 容器运行时 (nvidia-container-toolkit + containerd/docker)
+         ↑
+Layer 1: NVIDIA GPU Driver + CUDA Toolkit
+         ↑
+Layer 0: 裸机硬件 (GPU 物理卡 + NVLink/PCIe + 内存 + NVMe SSD)
+```
+
+| 层次 | 组件 | 部署方式 | 作用 |
+|------|------|---------|------|
+| **L0 硬件** | GPU 物理卡、NVLink、NVMe SSD | — | 算力底座 |
+| **L1 驱动** | NVIDIA GPU Driver + CUDA Toolkit | 每台 GPU 节点安装，rpm/deb 包 | 操作系统识别 GPU、提供 CUDA 运行时 |
+| **L2 容器运行时** | nvidia-container-toolkit + containerd | 每台 GPU 节点安装 | 容器内访问 GPU（注入 `nvidia.com/gpu` 设备） |
+| **L3 K8s GPU 感知** | GPU Operator (Device Plugin + DCGM + Feature Discovery) | K8s DaemonSet | K8s 调度器感知 GPU 资源、监控 GPU 健康状态、自动打标签 |
+| **L4 模型管理器** | 自研模型热插拔服务 | K8s Deployment | 模型下载/加载到 GPU 显存/卸载/版本切换/缓存预热 |
+| **L5 推理引擎** | vLLM / TGI / TensorRT-LLM | K8s Deployment (每模型一个) | 接收 /v1/chat/completions 请求 → GPU 推理 → 返回 token 流 |
+| **L6 推理 API** | Model Gateway (LiteLLM 内核) | K8s Deployment | 统一 OpenAI API 兼容入口、路由、Fallback、限流 |
+
+#### 3.2.3 各层详细部署设计
+
+**Layer 1: GPU 驱动安装**
+
+```bash
+# 每台 GPU 节点执行一次
+# 安装 NVIDIA Driver
+apt-get install -y nvidia-driver-550
+
+# 安装 CUDA Toolkit (推理不需要完整的 CUDA，runtime 即可)
+apt-get install -y cuda-runtime-12-4
+
+# 验证
+nvidia-smi
+# +-----------------------------------------------------------------------------+
+# | NVIDIA-SMI 550.xx    Driver Version: 550.xx    CUDA Version: 12.4     |
+# |-------------------------------+----------------------+----------------------+
+# | GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
+# | Fan  Temp  Perf  Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |
+# |===============================+======================+======================|
+# |   0  NVIDIA A100-SXM...  On   | 00000000:07:00.0 Off |                    0 |
+# | N/A   34C    P0    52W / 400W |      0MiB / 81920MiB |      0%      Default |
+# +-------------------------------+----------------------+----------------------+
+```
+
+**Layer 2: 容器运行时——让 Docker 容器能访问 GPU**
+
+```bash
+# 安装 nvidia-container-toolkit
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+  sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+  tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+apt-get update && apt-get install -y nvidia-container-toolkit
+
+# 配置 containerd（K8s 默认容器运行时）
+nvidia-ctk runtime configure --runtime=containerd
+systemctl restart containerd
+
+# 测试 GPU 容器访问
+docker run --rm --gpus all nvidia/cuda:12.4.0-runtime-ubuntu22.04 nvidia-smi
+```
+
+**Layer 3: K8s GPU Operator——让 K8s 感知和管理 GPU**
+
+```bash
+# 通过 Helm 安装 NVIDIA GPU Operator
+helm repo add nvidia https://helm.ngc.nvidia.com/nvidia
+helm repo update
+
+helm install gpu-operator nvidia/gpu-operator \
+  --namespace gpu-operator --create-namespace \
+  --set driver.enabled=false \           # 驱动已手动安装，跳过
+  --set toolkit.enabled=true \           # 启用容器工具集
+  --set devicePlugin.enabled=true \      # 启用设备插件(K8s感知GPU)
+  --set dcgm.enabled=true \             # 启用GPU监控
+  --set dcgmExporter.enabled=true \     # 启用 Prometheus GPU 指标导出
+  --set gfd.enabled=true                # GPU Feature Discovery(自动打标签)
+
+# 验证 K8s 节点 GPU 资源
+kubectl describe node gpu-node-01 | grep nvidia.com/gpu
+#   nvidia.com/gpu:     8          ← K8s 识别到 8 张 GPU
+#   nvidia.com/gpu.memory: 81920   ← 每张 80GB 显存
+
+# GPU Feature Discovery 自动打上的标签
+kubectl get node gpu-node-01 --show-labels | tr ',' '\n' | grep nvidia
+# nvidia.com/gpu.product=NVIDIA-A100-SXM4-80GB
+# nvidia.com/gpu.memory=81920
+# nvidia.com/gpu.count=8
+# nvidia.com/cuda.driver.major=550
+```
+
+**Layer 4: 模型管理器——模型生命周期管理**
+
+模型管理器是 GPU 集群独有的一层——大模型体积巨大（DeepSeek-V3 约 700GB，Qwen-72B 约 150GB），不可能每次请求都临时加载，需要精细的加载/卸载/缓存策略。
+
+```python
+class ModelManager:
+    """大模型生命周期管理器"""
+    
+    def __init__(self, model_registry: S3Client, gpu_cluster: K8sClient):
+        self.registry = model_registry
+        self.gpu_cluster = gpu_cluster
+        self.model_cache: dict[str, ModelState] = {}
+    
+    # === 模型存储: 原始权重 → 本地高速缓存 → GPU 显存 ===
+    
+    async def ensure_model_loaded(self, model_name: str, target_state: str = "hot") -> str:
+        """
+        确保模型处于目标状态:
+          cold: 仅在 S3 对象存储中
+          warm: 下载到本地 NVMe SSD 缓存, 不占用 GPU 显存
+          hot:  加载到 GPU 显存, 可立即推理
+        """
+        state = self.model_cache.get(model_name, ModelState.COLD)
+        
+        if state == ModelState.COLD:
+            # Step 1: S3 → 本地 NVMe SSD (warm)
+            await self._download_to_local_cache(model_name)
+            state = ModelState.WARM
+            self.model_cache[model_name] = state
+        
+        if target_state == "hot" and state == ModelState.WARM:
+            # Step 2: 本地 NVMe SSD → GPU 显存 (hot)
+            # 触发推理引擎 Deployment 启动并加载模型
+            await self.gpu_cluster.scale_up(model_name, replicas=1)
+            await self._wait_until_ready(model_name)
+            state = ModelState.HOT
+            self.model_cache[model_name] = state
+        
+        return state
+    
+    async def _download_to_local_cache(self, model_name: str):
+        """S3 → 节点本地 NVMe SSD"""
+        # 模型可能非常大 (DeepSeek-V3 ~700GB)
+        # 使用节点本地 NVMe SSD (3-7 GB/s 读取) 而非网络存储 (NFS 瓶颈)
+        local_path = f"/mnt/nvme/models/{model_name}"
+        
+        # 检查本地缓存
+        if os.path.exists(local_path):
+            return  # 已缓存
+        
+        # 从 S3 下载 (并行, 多线程)
+        await self.registry.download(
+            bucket="ai-platform-models",
+            prefix=model_name,
+            local_path=local_path,
+            threads=16  # 并行下载加速
+        )
+    
+    async def unload_model(self, model_name: str):
+        """卸载模型——释放 GPU 显存"""
+        await self.gpu_cluster.scale_down(model_name, replicas=0)
+        self.model_cache[model_name] = ModelState.WARM  # 不删本地缓存
+    
+    # === 冷热调度策略 ===
+    
+    class ModelState(Enum):
+        COLD = "cold"   # 仅 S3, 首次加载约 30s
+        WARM = "warm"   # 本地 NVMe SSD, 加载到 GPU 约 5s
+        HOT  = "hot"    # GPU 显存中, 推理延迟 < 100ms (不含 LLM 耗时)
+    
+    async def auto_tier(self):
+        """根据模型访问热度自动调整冷热状态"""
+        stats = await self._get_model_stats()
+        
+        for model_name, stat in stats.items():
+            if stat["requests_last_5min"] > 10:
+                # 高频访问 → 保持 hot
+                await self.ensure_model_loaded(model_name, "hot")
+            elif stat["requests_last_30min"] == 0:
+                # 30 分钟无访问 → 卸载到 warm
+                await self.unload_model(model_name)
+            elif stat["requests_last_24h"] == 0:
+                # 24 小时无访问 → 清理本地缓存到 cold
+                await self._clean_local_cache(model_name)
+```
+
+**模型存储的分级策略：**
+
+```
+S3/MinIO (cold, ~500ms 首字节延迟 + 下载时间)
+    │ 首次加载: 下载到本地 (DeepSeek-V3 ~30s)
+    ▼
+本地 NVMe SSD (warm, ~5s 加载到 GPU)
+    │ 预热: 加载到 GPU 显存
+    ▼
+GPU HBM 显存 (hot, ~10ms 首 token 延迟)
+    │ 推理: Token-by-token 生成
+    ▼
+KV Cache (GPU 显存驻留, 复用)
+```
+
+```bash
+# Kubernetes PersistentVolume——本地 NVMe SSD (highest I/O)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: model-cache-gpu-01
+spec:
+  capacity:
+    storage: 2Ti
+  accessModes: [ReadWriteOnce]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-nvme
+  local:
+    path: /mnt/nvme/models
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: nvidia.com/gpu.product
+          operator: In
+          values: [NVIDIA-A100-SXM4-80GB]
+```
+
+**Layer 5: 推理引擎——接收 HTTP 请求 → GPU 推理 → 返回 token**
+
+| 推理引擎 | 适用场景 | 核心特性 | 部署方式 |
+|---------|---------|---------|---------|
+| **vLLM** | 高吞吐在线推理（主力） | PagedAttention 高效管理 KV Cache、Continuous Batching、OpenAI API 兼容 | K8s Deployment（每模型 1 个） |
+| **TGI (Text Generation Inference)** | HuggingFace 生态、快速实验 | HuggingFace 原生支持、支持多种量化 | K8s Deployment（实验/验证） |
+| **TensorRT-LLM** | 极致性能优化 | NVIDIA 官方优化、FP8/INT4 量化、对 A100/H100 深度调优 | K8s Deployment（高负载生产） |
+| **Triton Inference Server** | 多模型混合推理 | NVIDIA 出品、支持多框架（ONNX/TensorFlow/PyTorch）、动态批处理 | K8s Deployment（多模型混部） |
+
+```yaml
+# 生产环境 vLLM 部署 (DeepSeek-V3)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-deepseek-v3
+  namespace: ai-platform
+spec:
+  replicas: 1  # 单副本即可（内部 Continuous Batching + PagedAttention 已充分利用 GPU）
+  selector:
+    matchLabels:
+      app: vllm-deepseek-v3
+  template:
+    metadata:
+      labels:
+        app: vllm-deepseek-v3
+    spec:
+      nodeSelector:
+        nvidia.com/gpu.product: NVIDIA-A100-SXM4-80GB  # 指定 GPU 型号
+      containers:
+      - name: vllm
+        image: vllm/vllm-openai:v0.6.0
+        args:
+        - --model /models/DeepSeek-V3           # 模型本地路径
+        - --tensor-parallel-size 4              # 4 张 GPU 做张量并行
+        - --gpu-memory-utilization 0.90         # 90% 显存用于 KV Cache
+        - --max-model-len 32768                 # 最大上下文长度
+        - --max-num-seqs 128                    # 最大并发请求数
+        - --enable-prefix-caching               # 启用前缀缓存 (System Prompt 复用)
+        ports:
+        - containerPort: 8000
+        env:
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: token
+        resources:
+          limits:
+            nvidia.com/gpu: 4                   # 独占 4 张 GPU
+          requests:
+            nvidia.com/gpu: 4
+        volumeMounts:
+        - name: model-cache
+          mountPath: /models                     # 模型文件挂载 (本地 NVMe SSD)
+        - name: shm
+          mountPath: /dev/shm                    # 共享内存 (多 GPU 通信需要)
+      volumes:
+      - name: model-cache
+        persistentVolumeClaim:
+          claimName: model-cache-gpu-01
+      - name: shm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 64Gi                        # 多 GPU 通信需要大共享内存
+
+---
+# Service 暴露
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-deepseek-v3
+spec:
+  selector:
+    app: vllm-deepseek-v3
+  ports:
+  - port: 8000
+    targetPort: 8000
+```
+
+#### 3.2.4 请求调度与 GPU 亲和性路由
+
+```
+请求到达 Model Gateway
+    │
+    ▼
+调度器查询: "这个请求想调 DeepSeek-V3"
+    │
+    ├── 已有 Pod 运行 DeepSeek-V3 → 检查 Pod 负载
+    │   ├── 负载 < 80% → 路由到该 Pod (复用 KV Cache)
+    │   └── 负载 > 80% → 触发扩容新 Pod
+    │
+    ├── 无 Pod 运行 DeepSeek-V3 → 触发模型管理器加载
+    │   ├── 本地有缓存 (warm) → 创建 Pod (5s 就绪)
+    │   └── 无缓存 (cold) → 下载 + 创建 Pod (30s 就绪)
+    │
+    └── 所有 Pod 都不可用 → Fallback 到备选模型
+```
+
+```python
+class GPUScheduler:
+    """GPU 推理调度器——比普通 HTTP 负载均衡多一层 GPU 语义"""
+    
+    async def route_request(self, model_name: str, request: dict) -> str:
+        """返回目标 Pod IP"""
+        
+        pods = await self.k8s.list_pods(
+            label_selector=f"app=vllm-{model_name}"
+        )
+        
+        if not pods:
+            # 无 Pod → 触发加载
+            await self.model_manager.ensure_model_loaded(model_name, "hot")
+            return await self._wait_and_route(model_name)
+        
+        # 选择策略: KV Cache 亲和性优先
+        best_pod = None
+        best_score = float('-inf')
+        
+        for pod in pods:
+            score = 0
+            
+            # KV Cache 命中率估算 (同一 session 的请求路由到同一 Pod)
+            session_id = request.get("session_id")
+            if session_id and self._has_kv_cache(pod, session_id):
+                score += 100  # 最高优先级: KV Cache 命中
+            
+            # GPU 显存剩余率
+            mem_free = self._get_gpu_memory_free(pod)
+            score += mem_free * 0.5
+            
+            # 当前并发请求数
+            active = self._get_active_requests(pod)
+            score -= active * 0.3
+            
+            if score > best_score:
+                best_score = score
+                best_pod = pod
+        
+        return best_pod["ip"]
+```
+
+#### 3.2.5 弹性伸缩策略
+
+```yaml
+# KEDA ScaledObject——基于 GPU 指标的弹性伸缩
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: vllm-deepseek-v3-autoscaler
+  namespace: ai-platform
+spec:
+  scaleTargetRef:
+    name: vllm-deepseek-v3
+  minReplicaCount: 0       # 无请求时缩到 0 (GPU 释放)
+  maxReplicaCount: 4       # 最多 4 副本 (4×4=16 张 GPU)
+  
+  triggers:
+  # 触发器1: 请求队列深度
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus.monitoring:9090
+      metricName: vllm_request_queue_depth
+      threshold: "50"       # 队列深度 > 50 → 扩容
+      query: |
+        avg(vllm:request_queue_depth{model="deepseek-v3"})
+  
+  # 触发器2: GPU 利用率
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus.monitoring:9090
+      metricName: gpu_utilization
+      threshold: "85"       # GPU 利用率 > 85% → 扩容
+      query: |
+        avg(DCGM_FI_DEV_GPU_UTIL{model="deepseek-v3"})
+  
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 300  # 冷却 5 分钟再缩容
+          policies:
+          - type: Percent
+            value: 50
+            periodSeconds: 60
+        scaleUp:
+          stabilizationWindowSeconds: 30   # 快速扩容
+          policies:
+          - type: Pods
+            value: 1
+            periodSeconds: 30
+```
+
+#### 3.2.6 GPU 监控体系
+
+```
+每张 GPU 需要采集的指标:
+┌────────────────────────────────────────────────────────────┐
+│                                                              │
+│  DCGM (NVIDIA Data Center GPU Manager) → Prometheus          │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │ DCGM_FI_DEV_GPU_UTIL          GPU 利用率             │   │
+│  │ DCGM_FI_DEV_FB_USED           显存使用量 (GB)        │   │
+│  │ DCGM_FI_DEV_FB_FREE           显存剩余量 (GB)        │   │
+│  │ DCGM_FI_DEV_GPU_TEMP          GPU 温度 (°C)          │   │
+│  │ DCGM_FI_DEV_POWER_USAGE       功耗 (W)               │   │
+│  │ DCGM_FI_DEV_SM_CLOCK          SM 时钟频率            │   │
+│  │ DCGM_FI_DEV_XID_ERRORS        XID 错误 (硬件故障)    │   │
+│  │ DCGM_FI_DEV_ECC_ERRORS        ECC 纠错错误数         │   │
+│  │ DCGM_FI_DEV_PCIE_REPLAY       PCIe 重传次数          │   │
+│  │ DCGM_FI_DEV_NVLINK_BANDWIDTH  NVLink 带宽利用率      │   │
+│  │ DCGM_FI_DEV_FB_USED_PERCENT   显存使用百分比         │   │
+│  └──────────────────────────────────────────────────────┘   │
+│                                                              │
+│  vLLM Prometheus Metrics (推理应用层)                         │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │ vllm:request_success_total      请求成功总数         │   │
+│  │ vllm:request_duration_seconds   请求延迟 (P50/P95/P99)│   │
+│  │ vllm:num_requests_running       当前运行中请求数       │   │
+│  │ vllm:num_requests_waiting       队列等待中请求数       │   │
+│  │ vllm:gpu_cache_usage_perc       KV Cache 使用率       │   │
+│  │ vllm:num_preemptions_total      抢占次数               │   │
+│  │ vllm:prompt_tokens_total        总 Prompt Token        │   │
+│  │ vllm:generation_tokens_total    总生成 Token            │   │
+│  │ vllm:time_to_first_token        首 Token 延迟           │   │
+│  │ vllm:time_per_output_token      每 Token 延迟           │   │
+│  └──────────────────────────────────────────────────────┘   │
+└────────────────────────────────────────────────────────────┘
+```
+
+```yaml
+# Prometheus GPU 告警规则
+groups:
+  - name: gpu_alerts
+    rules:
+      - alert: GPUUtilizationHigh
+        expr: DCGM_FI_DEV_GPU_UTIL > 95
+        for: 5m
+        severity: warning
+        annotations:
+          summary: "GPU 利用率 >95% 持续 5 分钟"
+      
+      - alert: GPUMemoryExhausted
+        expr: DCGM_FI_DEV_FB_USED / DCGM_FI_DEV_FB_TOTAL > 0.95
+        for: 2m
+        severity: critical
+        annotations:
+          summary: "GPU 显存使用超过 95%"
+      
+      - alert: GPUTemperatureHigh
+        expr: DCGM_FI_DEV_GPU_TEMP > 85
+        for: 5m
+        severity: critical
+        annotations:
+          summary: "GPU 温度超过 85°C, 可能触发降频"
+      
+      - alert: GPUHardwareError
+        expr: rate(DCGM_FI_DEV_XID_ERRORS[5m]) > 0
+        severity: critical
+        annotations:
+          summary: "检测到 GPU XID 硬件错误"
+      
+      - alert: ModelLoadFailure
+        expr: model_load_failures_total > 0
+        severity: critical
+        annotations:
+          summary: "模型加载失败"
+```
+
+#### 3.2.7 GPU 节点规划建议
+
+**单节点规格（以 A100-80GB × 8 为例）：**
+
+| 组件 | 规格 | 说明 |
+|------|------|------|
+| GPU | 8 × A100-SXM4-80GB | NVLink 互联 |
+| CPU | 2 × AMD EPYC 7763 (64核) | GPU 节点 CPU 需求不高 |
+| 内存 | 512 GB DDR4 | 模型加载时暂存 + 系统开销 |
+| 本地存储 | 2 × 3.84TB NVMe SSD (RAID 0) | 模型文件缓存 (单模型 ~700GB) |
+| 网络 | 1 × 100Gbps Mellanox ConnectX-6 | 模型下载 + 推理请求 |
+| GPU 互联 | NVLink 600GB/s | 张量并行通信 |
+
+**集群规模建议（按日请求量）：**
+
+| 日请求量 | A100-80GB 节点数 | 可同时加载模型数 | 部署方式 |
+|---------|:---:|:---:|---|
+| < 10 万 | 2 | 2-4 个 | 单 K8s 集群 |
+| 10-50 万 | 4-8 | 6-12 个 | 多 GPU 节点池 |
+| 50-200 万 | 10-20 | 15-30 个 | 多 GPU 节点池 + 模型分组 |
+| > 200 万 | 20+ | 按需 | 独立 GPU 集群 + 联邦调度 |
+
+#### 3.2.8 高可用与容灾
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ GPU 推理高可用三层保障                                     │
+│                                                          │
+│  层级1: 模型级容错                                        │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │ · 同一模型至少 2 个 GPU Pod（跨节点部署）              │  │
+│  │ · 单 Pod 故障 → K8s 自动重建 (30s 就绪)              │  │
+│  │ · Pod 重建期间请求路由到其他可用 Pod                  │  │
+│  └────────────────────────────────────────────────────┘  │
+│                                                          │
+│  层级2: 模型级故障转移                                    │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │ · 主模型 (DeepSeek-V3) 不可用                       │  │
+│  │   → Fallback 到备选模型 (Qwen-Plus / GPT-4o-mini)  │  │
+│  │ · Model Gateway 自动切换 (对调用方透明)              │  │
+│  └────────────────────────────────────────────────────┘  │
+│                                                          │
+│  层级3: 硬件级冗余                                        │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │ · 多 GPU 节点 (同一模型不部署在同一节点)              │  │
+│  │ · GPU 节点故障 → 模型自动迁移到健康节点               │  │
+│  │ · 国产芯片池作为兜底 (当 NVIDIA 集群满负载时)         │  │
+│  └────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────┘
+```
+
+#### 3.2.9 国产芯片适配
+
+```yaml
+# K8s 通过节点标签区分芯片类型，调度器自动适配
+节点标签:
+  accelerator: nvidia-a100     → 使用 vLLM (CUDA)
+  accelerator: ascend-910b     → 使用 MindSpore 推理引擎
+  accelerator: cambricon-mlu   → 使用寒武纪 Cambricon Neuware
+
+# 模型镜像按芯片类型构建
+model_images:
+  deepseek-v3-cuda:     "registry/models/deepseek-v3:cuda-12.4"
+  deepseek-v3-ascend:   "registry/models/deepseek-v3:ascend-cann-8.0"
+  
+# 调度策略
+scheduling:
+  # 优先 NVIDIA (性能最优)，兜底国产芯片
+  nodeAffinity:
+    preferred:
+    - weight: 100
+      matchExpressions:
+      - key: accelerator
+        operator: In
+        values: [nvidia-a100, nvidia-h100]
+    - weight: 50
+      matchExpressions:
+      - key: accelerator
+        operator: In
+        values: [ascend-910b]
+```
 
 ### 3.3 向量数据库
 
