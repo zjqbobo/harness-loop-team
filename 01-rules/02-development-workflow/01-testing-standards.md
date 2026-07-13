@@ -8,17 +8,18 @@
 ## 1️⃣ 后端单元测试规范
 
 ### 测试文件位置
-```
-src/
-├── services/
-│   ├── UserService.js
-│   └── __tests__/           ← 与源码同级
-│       └── UserService.test.js
-└── utils/
-    ├── format.js
-    └── __tests__/
-        └── format.test.js
-```
+
+与被测代码同目录或镜像目录，具体遵循各技术栈约定：
+
+| 技术栈 | 约定 | 示例 |
+|--------|------|------|
+| Java | 镜像目录，`src/test/java/` 对应 `src/main/java/` | `service/OrderServiceTest.java` |
+| TypeScript | 同级 `__tests__/` 或镜像目录 | `__tests__/userService.test.ts` |
+| Go | 同包同级 `_test.go` | `user_service_test.go` |
+| Python | 项目 `tests/` 目录镜像 | `tests/unit/test_user_service.py` |
+| .NET | 独立测试项目 | `Project.Tests/OrderServiceTests.cs` |
+
+> 各栈详细约定见 `docs/coding-standards/<stack>/xx-testing.md`。
 
 ### Mock 规范
 - 外部 API → Mock HTTP 响应
@@ -92,6 +93,13 @@ python ~/.claude/skills/webapp-testing/scripts/with_server.py \
   -- python test_e2e.py
 ```
 
+### 浏览器路径可移植性 🔴
+
+- E2E 脚本禁止硬编码本机浏览器绝对路径。
+- 如需指定浏览器二进制，必须通过环境变量传入，例如 `PLAYWRIGHT_CHROMIUM_EXECUTABLE`。
+- 默认优先使用 Playwright 自身发现机制或 webapp-testing/Playwright MCP 的浏览器预检结果。
+- 本机缓存路径只能出现在命令行环境变量中，不能写入仓库脚本。
+
 ---
 
 ## 3️⃣ 测试文档规范
@@ -126,21 +134,21 @@ python ~/.claude/skills/webapp-testing/scripts/with_server.py \
 ### 状态文件路径
 
 ```
-04-changes/{YYYYMMDD-需求名}/pipeline-state.json
+<project>/.harness/04-changes/{YYYYMMDD-需求名}/pipeline-state.json
 ```
 
 ### 写入规则
 
 | 阶段 | 写入方 | 写入时机 |
 |------|--------|---------|
-| `02-implementation-complete` | harness-implementation | 编码完成、测试用例文档决策点后 |
-| `04-testing-complete` | harness-testing | 测试执行完毕、测试报告决策点后 |
-| `03-code-review-complete` | harness-code-review | 审查完成 |
+| `implementation-complete` | harness-implementation | 编码完成、测试用例文档决策点后 |
+| `testing-complete` | harness-testing | 测试执行完毕、测试报告决策点后 |
+| `code-review-complete` | harness-code-review | 审查完成 |
 
 ### 读取规则
 
-- harness-testing 启动时：读取 pipeline-state.json，确认 `current_stage == "02-implementation-complete"`
-- harness-entry 启动时：扫描 `04-changes/` 下是否有未关闭的变更（`current_stage != "09-closed"`），提示用户恢复
+- harness-testing 启动时：读取 pipeline-state.json，确认 `current_stage == "implementation-complete"`
+- harness-entry 启动时：扫描 `04-changes/` 下是否有未关闭的变更（`current_stage != "closed"`），提示用户恢复
 
 ---
 
@@ -149,7 +157,7 @@ python ~/.claude/skills/webapp-testing/scripts/with_server.py \
 ```
 harness-implementation 编码完成
     ↓
-    ❶ 写入 pipeline-state.json (stage=02-implementation-complete)
+    ❶ 写入 pipeline-state.json (current_stage=implementation-complete)
     ↓
     ❷ 是否生成测试用例文档?
     ├─ 是 → Read模板 → 生成MD → 用户审阅 → 可选转DOCX
@@ -159,7 +167,7 @@ harness-implementation 编码完成
     ↓
 harness-testing 执行测试
     ↓
-    ❹ 写入 pipeline-state.json (stage=04-testing-complete)
+    ❹ 写入 pipeline-state.json (stage=testing-complete)
     ↓
     ❺ 是否生成测试报告?
     ├─ 是 → Read模板 → 生成MD → 用户审阅 → 可选转DOCX

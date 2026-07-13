@@ -1,0 +1,107 @@
+#!/bin/bash
+# ACM post-commit hook
+# Install: git config --global core.hooksPath ~/.acm/hooks
+
+set -euo pipefail
+
+ACMDIR="$HOME/.acm/hooks"
+REPO_PATH=$(git rev-parse --show-toplevel)
+COMMIT_HASH=$(git rev-parse HEAD)
+AUTHOR_EMAIL=$(git log -1 --format='%ae')
+COMMIT_TIME=$(git log -1 --format='%aI')
+COMMIT_BODY=$(git log -1 --format='%b')
+
+# ============================================================
+# AI detection: Co-Authored-By first, then session scan
+# ============================================================
+AI_INVOLVED=false
+AI_TOOLS="[]"
+
+if echo "$COMMIT_BODY" | grep -qi "Co-Authored-By.*Claude"; then
+    AI_INVOLVED=true
+    AI_TOOLS='["claude-code"]'
+elif echo "$COMMIT_BODY" | grep -qi "Co-Authored-By.*Copilot"; then
+    AI_INVOLVED=true
+    AI_TOOLS='["copilot"]'
+fi
+
+# Session log scan
+if [ "$AI_INVOLVED" = false ] && [ -d "$HOME/.claude/projects" ]; then
+    ACM_CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | tr '\n' ' ')
+    AI_TOOLS=$(ACM_CHANGED_FILES="$ACM_CHANGED_FILES" ACM_REPO="$REPO_PATH" python3 "$ACMDIR/detect_ai.py")
+    if [ "$AI_TOOLS" != "[]" ]; then
+        AI_INVOLVED=true
+    fi
+fi
+
+# ============================================================
+# Line stats
+# ============================================================
+LINES_ADDED=0
+LINES_DELETED=0
+NUMSTAT=$(git diff --numstat HEAD~1 HEAD 2>/dev/null || true)
+if [ -n "$NUMSTAT" ]; then
+    LINES_ADDED=$(echo "$NUMSTAT" | awk '{s+=$1} END {print s+0}')
+    LINES_DELETED=$(echo "$NUMSTAT" | awk '{s+=$2} END {print s+0}')
+fi
+
+# ============================================================
+# Step 1: Write commit metadata (sync)
+# ============================================================
+ACM_HASH="$COMMIT_HASH" \
+ACM_EMAIL="$AUTHOR_EMAIL" \
+ACM_TIME="$COMMIT_TIME" \
+ACM_AI=$( [ "$AI_INVOLVED" = true ] && echo 1 || echo 0 ) \
+ACM_TOOLS="$AI_TOOLS" \
+ACM_ADDED="$LINES_ADDED" \
+ACM_DELETED="$LINES_DELETED" \
+python3 "$ACMDIR/write_metadata.py"
+
+# ============================================================
+# Step 2: Async blame + session diff + auto-upload
+# ============================================================
+(
+    cd "$REPO_PATH"
+
+    AI_CACHE="$HOME/.acm/ai_hashes_cache"
+    CURRENT_HASH=$(git rev-parse HEAD)
+    IS_AI=false
+    if [ -f "$AI_CACHE" ] && grep -q "$CURRENT_HASH" "$AI_CACHE" 2>/dev/null; then
+        IS_AI=true
+    fi
+
+    CHANGED=$(git diff --numstat HEAD~1 HEAD 2>/dev/null || true)
+    if [ -z "$CHANGED" ]; then
+        exit 0
+    fi
+
+    if [ "$IS_AI" = true ] && [ -d "$HOME/.claude/projects" ]; then
+        CHANGED_FILES=$(echo "$CHANGED" | awk -F'\t' '{print $3}' | tr '\n' ' ')
+        ACM_CURRENT_HASH="$CURRENT_HASH" \
+        ACM_NUMSTAT="$CHANGED" \
+        ACM_REPO="$REPO_PATH" \
+        ACM_CHANGED_FILES="$CHANGED_FILES" \
+        python3 "$ACMDIR/blame_ai.py"
+    else
+        ACM_CURRENT_HASH="$CURRENT_HASH" \
+        ACM_NUMSTAT="$CHANGED" \
+        python3 "$ACMDIR/blame_human.py"
+    fi
+
+    # Auto-upload to server
+    ACM_SERVER_URL="${ACM_SERVER_URL:-http://localhost:8080}" python3 -c "
+import sys, os
+sys.path.insert(0, '$HOME/.claude/harness/scripts/acm')
+from acm.reporter import Reporter
+from acm.storage import LocalStore
+Reporter(LocalStore(), server_url=os.environ['ACM_SERVER_URL']).run()
+" 2>/dev/null || true
+) &
+
+# ============================================================
+# Chain: repository's own local post-commit hook if present
+# ============================================================
+REPO_HOOK="$(git rev-parse --git-dir 2>/dev/null)/hooks/post-commit"
+if [ -f "$REPO_HOOK" ] && [ "$REPO_HOOK" != "$0" ] && [ -x "$REPO_HOOK" ]; then
+    "$REPO_HOOK"
+fi

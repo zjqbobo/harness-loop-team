@@ -27,13 +27,17 @@ cd ~/.claude/harness
 
 | Skill | 触发词 | 描述 |
 |-------|--------|------|
-| `harness-entry` | 会话启动时自动加载 | 建立纪律基线 |
+| `harness-entry` | 会话启动时自动加载 | 建立纪律基线，任务分诊 |
 | `harness-brainstorming` | 设计、方案、分析需求、架构 | 9步方案设计流程 |
+| `harness-design-review` | 审核方案、review设计、方案评审 | 四检查面，循环至零阻断 |
 | `harness-document-generation` | 写文档、出方案、生成PRD | 模板遵循 + 配图 + 转换 |
+| `harness-pmo` | 拆任务、排期、里程碑 | 里程碑→史诗→用户故事→任务 |
 | `harness-systematic-debugging` | 修bug、报错、不工作 | 四阶段根因调试 |
 | `harness-code-review` | review、审查、检查代码 | 三阶段独立评审 |
-| `harness-implementation` | 实现、开发、写代码 | TDD + 编码规范 |
-| `harness-testing` | 写测试、跑测试、E2E | 单测 + Playwright 截图 |
+| `harness-implementation` | 实现、开发、写代码 | TDD + 动态编码规范 |
+| `harness-testing` | 写测试、跑测试、E2E | 单测 + E2E + 压测 |
+| `harness-init` | 初始化项目规范、分析工程约定 | 扫描代码 → 生成约定 |
+| `harness-design-indexer` | 自动调用 | 设计文档章节索引生成 |
 
 ## 目录结构
 
@@ -42,27 +46,27 @@ harness-engineering/
 ├── install.sh                     # 一键安装
 ├── CLAUDE.md                      # 全局 Claude Code 配置
 ├── README.md                      # 本文件
-├── 00-harness-core/               # 中枢定义（流水线、质量门禁）
+├── 00-harness-core/               # 中枢定义（流水线、知识索引）
 ├── 01-rules/                      # 详细规则
-│   ├── 02-development-workflow/   # 编码开发规范
-│   └── 04-document-standards/     # 文档生成规范
-├── 02-skills-source/              # 技能源文件
+│   ├── 02-development-workflow/   # 开发流程、测试、沉淀、分诊、压测规范
+│   └── 04-document-standards/     # 文档生成规范（PRD/系统设计/原型）
+├── 02-skills-source/              # 技能源文件（11个skill）
 │   ├── harness-entry/
 │   ├── harness-brainstorming/
+│   ├── harness-design-review/
 │   ├── harness-document-generation/
+│   ├── harness-pmo/
 │   ├── harness-systematic-debugging/
 │   ├── harness-code-review/
 │   ├── harness-implementation/
-│   └── harness-testing/
+│   ├── harness-testing/
+│   ├── harness-init/
+│   └── harness-design-indexer/
 ├── 09-templates/                  # 文档模板
-│   ├── 系统设计文档模板.md
-│   ├── 系统接口设计文档模版.md
-│   ├── 系统物理模型设计文档模版.md
-│   └── PRD标准模板_v2.0.md
-└── scripts/doc/                   # 工具脚本
-    ├── mermaid-render.sh
-    ├── md2docx.sh
-    └── svg2png.sh
+├── docs/                          # 知识库（架构/业务/编码规范/模式）
+└── scripts/                       # 工具脚本
+    ├── doc/                       # 文档工具链
+    └── generate-design-manifest.py
 ```
 
 ## 架构设计
@@ -79,13 +83,13 @@ harness-engineering/
 
 | | Superpowers | Harness Engineering |
 |---|---|---|
-| 定位 | 通用开发纪律 | 企业级全流程（文档+编码+评审+部署） |
-| 能力范围 | 14 个 skill | 6 个复合 skill（含链式移交） |
+| 定位 | 通用开发纪律 | 企业级全流程（文档+编码+测试+评审） |
+| 能力范围 | 14 个 skill | 11 个复合 skill（含链式移交） |
 | 文档体系 | 无 | 完整模板 + 图表 + 转换工具链 |
-| 质量门禁 | HARD GATE | 5 个程序化门禁（JSON） |
+| 质量门禁 | HARD GATE | 覆盖率+测试+评审三重门禁 |
 | 语言 | 英文 | 中英双语触发词 |
 
-**推荐同时安装**，Superpowers 覆盖开发纪律，Harness 覆盖文档/编码/评审/部署全流程。
+**推荐同时安装**，Superpowers 覆盖开发纪律，Harness 覆盖文档/编码/测试/评审全流程。
 
 ## 自定义
 

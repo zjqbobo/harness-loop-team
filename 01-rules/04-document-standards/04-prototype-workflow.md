@@ -53,11 +53,16 @@
 4. 保存为 `{项目名}_原型.mockup.html`
 
 ### 阶段3：自动截图
-自动执行 Node.js 脚本完成截图：
-1. 启动本地 HTTP 服务器
-2. 使用 Playwright + Chrome 浏览器
-3. 遍历所有页面截图
-4. 保存到 `pbc-images/` 目录
+
+使用 harness 标准脚本完成截图：
+
+```bash
+# 脚本路径按路径解析规则查找 scripts/doc/screenshot-html.sh
+# 用法: screenshot-html.sh <html文件> <输出PNG> <宽度> <高度>
+screenshot-html.sh ./原型.mockup.html ./images/prototype-overview.png 1200 2000
+```
+
+脚本自动完成：查找 headless 浏览器 → 启动 HTTP 服务器 → 截图 → 输出 PNG。
 
 ### 阶段4：自动填充文档
 同时填充两种格式：
@@ -87,15 +92,15 @@
 
 ## 3️⃣ 技术实现说明
 
-### 截图脚本
-- 脚本位置：项目根目录 `capture-prototype.js`
-- 使用 `http-server + playwright
-- 使用系统 Chrome 浏览器（无需下载浏览器
+### 截图
+使用 harness 标准脚本 `scripts/doc/screenshot-html.sh`：
+- 自适应查找 headless 浏览器（Playwright → Puppeteer → 系统 Chrome）
+- 自动启动 HTTP 服务器 → 截图 → 输出 PNG
+- 禁止临时写 Node.js/Python 脚本代替此标准工具
 
-### 图片插入脚本
-- 脚本位置：项目根目录 `insert-images-to-docx.py`
-- 使用 `python-docx` 库
-- 自动定位关键词位置插入图片
+### 图片插入文档
+- Markdown：使用 `![图注](images/xxx.png)` 相对路径引用
+- DOCX：使用 `md2docx.sh` 自动嵌入，图片宽度 6.2 英寸
 
 ---
 
@@ -106,12 +111,10 @@
 ├── {项目名}_PRD_完整版.md
 ├── {项目名}_PRD_WITH_IMAGES.docx
 ├── {项目名}_原型.mockup.html
-├── pbc-images/
-│   ├── 01-流程列表页.png
-│   ├── 02-流程配置页.png
-│   └── ...
-├── capture-prototype.js
-└── insert-images-to-docx.py
+└── images/
+    ├── 01-流程列表页.png
+    ├── 02-流程配置页.png
+    └── ...
 ```
 
 ---

@@ -1,0 +1,2247 @@
+{
+  "title": "仓储管理系统(WMS) 物理模型设计文档",
+  "doc_id": "PMD-WMS-2026-001",
+  "author": "系统架构组",
+  "date": "2026-05-12",
+  "domains": [
+    {
+      "name": "入库域",
+      "tables": [
+        {
+          "name": "inbound_order",
+          "cn_name": "入库预约单",
+          "has_create_by": true,
+          "has_update_by": true,
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键，自增"
+            ],
+            [
+              "inbound_no",
+              "入库单号",
+              "varchar(32)",
+              "非空",
+              "",
+              "IN+年月日+4位序号，UK"
+            ],
+            [
+              "warehouse_id",
+              "仓库ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "关联warehouse表"
+            ],
+            [
+              "supplier_id",
+              "供应商ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "关联supplier表"
+            ],
+            [
+              "expect_arrive_time",
+              "预计到货时间",
+              "datetime",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "actual_arrive_time",
+              "实际到货时间",
+              "datetime",
+              "可空",
+              "",
+              "到货登记时回填"
+            ],
+            [
+              "status",
+              "状态",
+              "tinyint",
+              "非空",
+              "0",
+              "0待审核 1已确认 2验收中 3待上架 4已完成 5已取消"
+            ],
+            [
+              "remark",
+              "备注",
+              "varchar(500)",
+              "可空",
+              "",
+              ""
+            ]
+          ],
+          "indexes": [
+            [
+              "uk_inbound_no",
+              "inbound_no",
+              "唯一索引"
+            ],
+            [
+              "idx_inbound_supplier",
+              "supplier_id",
+              "普通索引"
+            ],
+            [
+              "idx_inbound_wh_status",
+              "warehouse_id, status",
+              "联合索引"
+            ],
+            [
+              "idx_inbound_create",
+              "create_time",
+              "普通索引"
+            ]
+          ],
+          "data_volume": "万级/天",
+          "data_retention": "按create_time保留近3年数据，历史归档至wms_archive库"
+        },
+        {
+          "name": "inbound_order_detail",
+          "cn_name": "入库明细",
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键，自增"
+            ],
+            [
+              "inbound_order_id",
+              "入库单ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "关联inbound_order"
+            ],
+            [
+              "sku_id",
+              "商品ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "关联sku表"
+            ],
+            [
+              "expect_qty",
+              "预约数量",
+              "decimal(18,2)",
+              "非空",
+              "",
+              ">0"
+            ],
+            [
+              "actual_qty",
+              "实收数量",
+              "decimal(18,2)",
+              "可空",
+              "",
+              "验收时填写"
+            ],
+            [
+              "batch_no",
+              "批次号",
+              "varchar(50)",
+              "可空",
+              "",
+              "验收时填写或系统生成"
+            ],
+            [
+              "production_date",
+              "生产日期",
+              "date",
+              "可空",
+              "",
+              ""
+            ],
+            [
+              "expire_date",
+              "过期日期",
+              "date",
+              "可空",
+              "",
+              ""
+            ],
+            [
+              "quality_status",
+              "质检状态",
+              "tinyint",
+              "可空",
+              "0",
+              "0-未检，1-合格，2-不合格"
+            ]
+          ],
+          "indexes": [
+            [
+              "idx_detail_inbound",
+              "inbound_order_id",
+              "普通索引"
+            ],
+            [
+              "idx_detail_sku",
+              "sku_id",
+              "普通索引"
+            ],
+            [
+              "idx_detail_batch",
+              "batch_no",
+              "普通索引"
+            ]
+          ],
+          "data_volume": "万级/天",
+          "data_retention": "随inbound_order归档，保留3年"
+        },
+        {
+          "name": "putaway_task",
+          "cn_name": "上架任务",
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "inbound_order_id",
+              "入库单ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "关联inbound_order"
+            ],
+            [
+              "location_id",
+              "目标库位ID",
+              "bigint(20)",
+              "可空",
+              "",
+              "推荐/确认后填写"
+            ],
+            [
+              "operator_id",
+              "理货员ID",
+              "bigint(20)",
+              "可空",
+              "",
+              "领取任务时填写"
+            ],
+            [
+              "status",
+              "任务状态",
+              "tinyint",
+              "非空",
+              "0",
+              "0-待分配，1-已分配，2-上架中，3-已完成"
+            ],
+            [
+              "assign_time",
+              "分配时间",
+              "datetime",
+              "可空",
+              "",
+              ""
+            ],
+            [
+              "complete_time",
+              "完成时间",
+              "datetime",
+              "可空",
+              "",
+              ""
+            ]
+          ],
+          "indexes": [
+            [
+              "idx_task_inbound",
+              "inbound_order_id",
+              "普通索引"
+            ],
+            [
+              "idx_task_operator",
+              "operator_id, status",
+              "联合索引"
+            ]
+          ],
+          "data_volume": "万级/天",
+          "data_retention": "随inbound_order归档，保留3年"
+        }
+      ]
+    },
+    {
+      "name": "出库域",
+      "tables": [
+        {
+          "name": "outbound_order",
+          "cn_name": "出库单",
+          "has_create_by": true,
+          "has_update_by": true,
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键，自增"
+            ],
+            [
+              "outbound_no",
+              "出库单号",
+              "varchar(32)",
+              "非空",
+              "",
+              "OUT+年月日+4位序号，UK"
+            ],
+            [
+              "warehouse_id",
+              "仓库ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "customer_id",
+              "客户ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "关联customer表"
+            ],
+            [
+              "order_source",
+              "订单来源",
+              "varchar(50)",
+              "可空",
+              "",
+              "淘宝/京东/拼多多/ERP/手工"
+            ],
+            [
+              "external_order_no",
+              "外部单号",
+              "varchar(100)",
+              "可空",
+              "",
+              "来源系统单号(去重用)"
+            ],
+            [
+              "receiver_name",
+              "收货人",
+              "varchar(50)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "receiver_phone",
+              "收货电话",
+              "varchar(20)",
+              "非空",
+              "",
+              "加密存储"
+            ],
+            [
+              "receiver_address",
+              "收货地址",
+              "varchar(500)",
+              "非空",
+              "",
+              "加密存储"
+            ],
+            [
+              "logistics_company",
+              "物流公司",
+              "varchar(50)",
+              "可空",
+              "",
+              ""
+            ],
+            [
+              "tracking_no",
+              "物流单号",
+              "varchar(50)",
+              "可空",
+              "",
+              ""
+            ],
+            [
+              "status",
+              "状态",
+              "tinyint",
+              "非空",
+              "0",
+              "0待审核 1待拣货 2拣货中 3待验货 4待发货 5已完成 6已取消"
+            ]
+          ],
+          "indexes": [
+            [
+              "uk_outbound_no",
+              "outbound_no",
+              "唯一索引"
+            ],
+            [
+              "uk_external_order",
+              "order_source, external_order_no",
+              "唯一索引"
+            ],
+            [
+              "idx_outbound_customer",
+              "customer_id",
+              "普通索引"
+            ],
+            [
+              "idx_outbound_wh_status",
+              "warehouse_id, status",
+              "联合索引"
+            ],
+            [
+              "idx_outbound_create",
+              "create_time",
+              "普通索引"
+            ]
+          ],
+          "data_volume": "十万级/天(高峰期)",
+          "data_retention": "按create_time保留近3年，历史归档至wms_archive库"
+        },
+        {
+          "name": "outbound_order_detail",
+          "cn_name": "出库明细",
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "outbound_order_id",
+              "出库单ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "关联outbound_order"
+            ],
+            [
+              "sku_id",
+              "商品ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "关联sku表"
+            ],
+            [
+              "order_qty",
+              "订单数量",
+              "decimal(18,2)",
+              "非空",
+              "",
+              ">0"
+            ],
+            [
+              "picked_qty",
+              "已拣数量",
+              "decimal(18,2)",
+              "非空",
+              "0",
+              "拣货完成回填"
+            ],
+            [
+              "inspected_qty",
+              "已验数量",
+              "decimal(18,2)",
+              "非空",
+              "0",
+              "验货完成回填"
+            ],
+            [
+              "batch_no",
+              "出库批次",
+              "varchar(50)",
+              "可空",
+              "",
+              "拣货时记录"
+            ],
+            [
+              "location_id",
+              "出库库位",
+              "bigint(20)",
+              "可空",
+              "",
+              "拣货时记录"
+            ]
+          ],
+          "indexes": [
+            [
+              "idx_odetail_order",
+              "outbound_order_id",
+              "普通索引"
+            ],
+            [
+              "idx_odetail_sku",
+              "sku_id",
+              "普通索引"
+            ]
+          ],
+          "data_volume": "十万级/天",
+          "data_retention": "随outbound_order归档，保留3年"
+        },
+        {
+          "name": "wave",
+          "cn_name": "波次",
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "wave_no",
+              "波次号",
+              "varchar(32)",
+              "非空",
+              "",
+              "WAVE+年月日+4位序号，UK"
+            ],
+            [
+              "warehouse_id",
+              "仓库ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "picker_id",
+              "拣货员ID",
+              "bigint(20)",
+              "可空",
+              "",
+              "分配后填写"
+            ],
+            [
+              "order_count",
+              "包含订单数",
+              "int",
+              "非空",
+              "",
+              "≤ 50"
+            ],
+            [
+              "wave_rule",
+              "波次规则",
+              "varchar(200)",
+              "可空",
+              "",
+              "规则描述JSON"
+            ],
+            [
+              "status",
+              "状态",
+              "tinyint",
+              "非空",
+              "0",
+              "0-新建，1-已分配，2-拣货中，3-已完成，4-已取消"
+            ],
+            [
+              "assign_time",
+              "分配时间",
+              "datetime",
+              "可空",
+              "",
+              ""
+            ],
+            [
+              "complete_time",
+              "完成时间",
+              "datetime",
+              "可空",
+              "",
+              ""
+            ]
+          ],
+          "indexes": [
+            [
+              "uk_wave_no",
+              "wave_no",
+              "唯一索引"
+            ],
+            [
+              "idx_wave_picker",
+              "picker_id, status",
+              "联合索引"
+            ],
+            [
+              "idx_wave_wh_status",
+              "warehouse_id, status",
+              "联合索引"
+            ]
+          ],
+          "data_volume": "万级/天",
+          "data_retention": "按create_time保留近1年数据"
+        },
+        {
+          "name": "wave_order_relation",
+          "cn_name": "波次订单关联",
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "wave_id",
+              "波次ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "关联wave"
+            ],
+            [
+              "outbound_order_id",
+              "出库单ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "关联outbound_order"
+            ],
+            [
+              "pick_sequence",
+              "拣货序号",
+              "int",
+              "非空",
+              "",
+              "路径优化后的拣货顺序"
+            ]
+          ],
+          "indexes": [
+            [
+              "uk_wave_order",
+              "wave_id, outbound_order_id",
+              "唯一索引"
+            ],
+            [
+              "idx_wr_wave",
+              "wave_id",
+              "普通索引"
+            ],
+            [
+              "idx_wr_order",
+              "outbound_order_id",
+              "普通索引"
+            ]
+          ],
+          "data_volume": "十万级/天",
+          "data_retention": "随wave归档，保留1年"
+        }
+      ]
+    },
+    {
+      "name": "库内域",
+      "tables": [
+        {
+          "name": "location",
+          "cn_name": "库位",
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "location_code",
+              "库位编码",
+              "varchar(50)",
+              "非空",
+              "",
+              "全局唯一，UK"
+            ],
+            [
+              "warehouse_id",
+              "仓库ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "zone_id",
+              "库区ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "location_type",
+              "库位类型",
+              "tinyint",
+              "非空",
+              "1",
+              "1-常规，2-冷藏，3-冷冻，4-危险品"
+            ],
+            [
+              "status",
+              "状态",
+              "tinyint",
+              "非空",
+              "0",
+              "0-空闲，1-占用，2-锁定，3-禁用"
+            ],
+            [
+              "max_capacity",
+              "最大容量(体积)",
+              "decimal(18,2)",
+              "可空",
+              "",
+              "m³"
+            ],
+            [
+              "max_weight",
+              "最大承重",
+              "decimal(18,2)",
+              "可空",
+              "",
+              "kg"
+            ]
+          ],
+          "indexes": [
+            [
+              "uk_location_code",
+              "location_code",
+              "唯一索引"
+            ],
+            [
+              "idx_location_wh",
+              "warehouse_id",
+              "普通索引"
+            ],
+            [
+              "idx_location_zone",
+              "zone_id",
+              "普通索引"
+            ],
+            [
+              "idx_location_status",
+              "status",
+              "普通索引"
+            ]
+          ],
+          "data_volume": "静态数据，初期万级",
+          "data_retention": "永久保留"
+        },
+        {
+          "name": "move_order",
+          "cn_name": "移库单",
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "move_no",
+              "移库单号",
+              "varchar(32)",
+              "非空",
+              "",
+              "MV+年月日+4位序号，UK"
+            ],
+            [
+              "warehouse_id",
+              "仓库ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "sku_id",
+              "商品ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "from_location_id",
+              "移出库位",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "to_location_id",
+              "移入库位",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "move_qty",
+              "移库数量",
+              "decimal(18,2)",
+              "非空",
+              "",
+              ">0"
+            ],
+            [
+              "operator_id",
+              "操作人",
+              "bigint(20)",
+              "可空",
+              "",
+              ""
+            ],
+            [
+              "status",
+              "状态",
+              "tinyint",
+              "非空",
+              "0",
+              "0-新建，1-执行中，2-已完成"
+            ]
+          ],
+          "indexes": [
+            [
+              "uk_move_no",
+              "move_no",
+              "唯一索引"
+            ],
+            [
+              "idx_move_from",
+              "from_location_id",
+              "普通索引"
+            ]
+          ],
+          "data_volume": "千级/天",
+          "data_retention": "按create_time保留近3年数据"
+        },
+        {
+          "name": "check_order",
+          "cn_name": "盘点单",
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "check_no",
+              "盘点单号",
+              "varchar(32)",
+              "非空",
+              "",
+              "CK+年月日+4位序号，UK"
+            ],
+            [
+              "warehouse_id",
+              "仓库ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "check_type",
+              "盘点类型",
+              "tinyint",
+              "非空",
+              "",
+              "1-明盘，2-盲盘，3-动销盘"
+            ],
+            [
+              "check_range",
+              "盘点范围(JSON)",
+              "varchar(1000)",
+              "非空",
+              "",
+              "库区/分类/商品范围JSON"
+            ],
+            [
+              "status",
+              "状态",
+              "tinyint",
+              "非空",
+              "0",
+              "0-新建，1-盘点中，2-待审批，3-已完成"
+            ],
+            [
+              "difference_count",
+              "差异SKU数",
+              "int",
+              "可空",
+              "",
+              "盘点完成后计算"
+            ]
+          ],
+          "indexes": [
+            [
+              "uk_check_no",
+              "check_no",
+              "唯一索引"
+            ],
+            [
+              "idx_check_wh_status",
+              "warehouse_id, status",
+              "联合索引"
+            ]
+          ],
+          "data_volume": "千级/天",
+          "data_retention": "按create_time保留近3年数据"
+        },
+        {
+          "name": "check_order_detail",
+          "cn_name": "盘点明细",
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "check_order_id",
+              "盘点单ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "关联check_order"
+            ],
+            [
+              "sku_id",
+              "商品ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "location_id",
+              "库位ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "system_qty",
+              "系统数量",
+              "decimal(18,2)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "actual_qty",
+              "实际数量",
+              "decimal(18,2)",
+              "可空",
+              "",
+              "PDA扫码录入"
+            ],
+            [
+              "difference_qty",
+              "差异数量",
+              "decimal(18,2)",
+              "可空",
+              "",
+              "actual - system"
+            ]
+          ],
+          "indexes": [
+            [
+              "idx_cd_check",
+              "check_order_id",
+              "普通索引"
+            ]
+          ],
+          "data_volume": "万级/天",
+          "data_retention": "随check_order归档，保留3年"
+        },
+        {
+          "name": "adjust_order",
+          "cn_name": "库存调整单",
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "adjust_no",
+              "调整单号",
+              "varchar(32)",
+              "非空",
+              "",
+              "AD+年月日+4位序号，UK"
+            ],
+            [
+              "warehouse_id",
+              "仓库ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "adjust_type",
+              "调整类型",
+              "tinyint",
+              "非空",
+              "",
+              "1-盘盈，2-盘亏，3-破损，4-报损，5-其他"
+            ],
+            [
+              "sku_id",
+              "商品ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "location_id",
+              "库位ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "adjust_qty",
+              "调整数量",
+              "decimal(18,2)",
+              "非空",
+              "",
+              "正数为增，负数为减"
+            ],
+            [
+              "reason",
+              "调整原因",
+              "varchar(500)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "status",
+              "状态",
+              "tinyint",
+              "非空",
+              "0",
+              "0-待审批，1-已审批，2-已执行"
+            ]
+          ],
+          "indexes": [
+            [
+              "uk_adjust_no",
+              "adjust_no",
+              "唯一索引"
+            ],
+            [
+              "idx_adjust_wh_status",
+              "warehouse_id, status",
+              "联合索引"
+            ]
+          ],
+          "data_volume": "百级/天",
+          "data_retention": "按create_time保留近3年数据"
+        }
+      ]
+    },
+    {
+      "name": "库存域",
+      "tables": [
+        {
+          "name": "inventory",
+          "cn_name": "库存主表 ★核心聚合根",
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键，自增"
+            ],
+            [
+              "warehouse_id",
+              "仓库ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "sku_id",
+              "商品ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "location_id",
+              "库位ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "batch_no",
+              "批次号",
+              "varchar(50)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "available_qty",
+              "可用数量",
+              "decimal(18,2)",
+              "非空",
+              "0",
+              ""
+            ],
+            [
+              "frozen_qty",
+              "冻结数量",
+              "decimal(18,2)",
+              "非空",
+              "0",
+              ""
+            ],
+            [
+              "version",
+              "乐观锁版本号",
+              "int",
+              "非空",
+              "0",
+              "每次更新+1"
+            ]
+          ],
+          "indexes": [
+            [
+              "uk_inventory",
+              "warehouse_id, sku_id, location_id, batch_no",
+              "唯一索引(核心约束)"
+            ],
+            [
+              "idx_inv_sku",
+              "sku_id",
+              "普通索引"
+            ],
+            [
+              "idx_inv_location",
+              "location_id",
+              "普通索引"
+            ],
+            [
+              "idx_inv_batch",
+              "batch_no",
+              "普通索引"
+            ]
+          ],
+          "data_volume": "SKU数×库位数，初期百万级",
+          "data_retention": "永久保留(库存记录不可删除)"
+        },
+        {
+          "name": "inventory_transaction",
+          "cn_name": "库存流水",
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键，自增"
+            ],
+            [
+              "transaction_no",
+              "流水号",
+              "varchar(40)",
+              "非空",
+              "",
+              "TXN+时间戳+序号，UK"
+            ],
+            [
+              "transaction_type",
+              "变动类型",
+              "tinyint",
+              "非空",
+              "",
+              "1-入库增加，2-出库扣减，3-移库，4-盘点调整，5-冻结，6-解冻"
+            ],
+            [
+              "warehouse_id",
+              "仓库ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "sku_id",
+              "商品ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "location_id",
+              "库位ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "batch_no",
+              "批次号",
+              "varchar(50)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "change_qty",
+              "变动数量",
+              "decimal(18,2)",
+              "非空",
+              "",
+              "正=增，负=减"
+            ],
+            [
+              "before_available_qty",
+              "变动前可用量",
+              "decimal(18,2)",
+              "非空",
+              "",
+              "快照"
+            ],
+            [
+              "after_available_qty",
+              "变动后可用量",
+              "decimal(18,2)",
+              "非空",
+              "",
+              "快照"
+            ],
+            [
+              "biz_order_no",
+              "业务单号",
+              "varchar(32)",
+              "非空",
+              "",
+              "关联来源业务单号"
+            ],
+            [
+              "biz_order_type",
+              "业务单类型",
+              "tinyint",
+              "非空",
+              "",
+              "1-入库单，2-出库单，3-移库单，4-盘点单，5-调整单"
+            ]
+          ],
+          "indexes": [
+            [
+              "uk_txn_no",
+              "transaction_no",
+              "唯一索引"
+            ],
+            [
+              "idx_txn_sku_time",
+              "sku_id, create_time",
+              "联合索引(追溯核心)"
+            ],
+            [
+              "idx_txn_batch",
+              "batch_no",
+              "普通索引"
+            ],
+            [
+              "idx_txn_biz_order",
+              "biz_order_no, biz_order_type",
+              "联合索引"
+            ],
+            [
+              "idx_txn_create_time",
+              "create_time",
+              "普通索引(归档)"
+            ]
+          ],
+          "data_volume": "百万级/天",
+          "data_retention": "按月分区保留近2年，历史归档至wms_archive库"
+        },
+        {
+          "name": "inventory_freeze_record",
+          "cn_name": "库存冻结记录",
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "inventory_id",
+              "库存记录ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "关联inventory表"
+            ],
+            [
+              "freeze_type",
+              "冻结类型",
+              "tinyint",
+              "非空",
+              "",
+              "1-出库冻结，2-盘点冻结，3-质检冻结"
+            ],
+            [
+              "freeze_qty",
+              "冻结数量",
+              "decimal(18,2)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "biz_order_no",
+              "业务单号",
+              "varchar(32)",
+              "非空",
+              "",
+              "关联来源业务单"
+            ],
+            [
+              "expire_time",
+              "超时解冻时间",
+              "datetime",
+              "非空",
+              "",
+              "默认创建时间+30min"
+            ],
+            [
+              "status",
+              "状态",
+              "tinyint",
+              "非空",
+              "0",
+              "0-冻结中，1-已解冻，2-已扣减"
+            ]
+          ],
+          "indexes": [
+            [
+              "idx_freeze_inventory",
+              "inventory_id",
+              "普通索引"
+            ],
+            [
+              "idx_freeze_order",
+              "biz_order_no",
+              "普通索引"
+            ],
+            [
+              "idx_freeze_expire",
+              "expire_time, status",
+              "联合索引"
+            ]
+          ],
+          "data_volume": "十万级/天",
+          "data_retention": "按create_time保留近1年数据"
+        }
+      ]
+    },
+    {
+      "name": "基础数据域",
+      "tables": [
+        {
+          "name": "sku",
+          "cn_name": "商品",
+          "has_delete_flag": true,
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "sku_code",
+              "商品编码",
+              "varchar(50)",
+              "非空",
+              "",
+              "全局唯一，UK"
+            ],
+            [
+              "sku_name",
+              "商品名称",
+              "varchar(200)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "barcode",
+              "条码",
+              "varchar(50)",
+              "可空",
+              "",
+              ""
+            ],
+            [
+              "category_id",
+              "分类ID",
+              "bigint(20)",
+              "可空",
+              "",
+              ""
+            ],
+            [
+              "spec",
+              "规格",
+              "varchar(200)",
+              "可空",
+              "",
+              ""
+            ],
+            [
+              "unit",
+              "单位",
+              "varchar(20)",
+              "非空",
+              "",
+              "件/箱/个/kg"
+            ],
+            [
+              "shelf_life_days",
+              "保质期天数",
+              "int",
+              "可空",
+              "",
+              ""
+            ]
+          ],
+          "indexes": [
+            [
+              "uk_sku_code",
+              "sku_code",
+              "唯一索引"
+            ],
+            [
+              "idx_sku_barcode",
+              "barcode",
+              "普通索引"
+            ],
+            [
+              "idx_sku_category",
+              "category_id",
+              "普通索引"
+            ]
+          ],
+          "data_volume": "初期万级，上限5万",
+          "data_retention": "永久保留"
+        },
+        {
+          "name": "supplier",
+          "cn_name": "供应商",
+          "has_delete_flag": true,
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "supplier_code",
+              "供应商编码",
+              "varchar(50)",
+              "非空",
+              "",
+              "UK"
+            ],
+            [
+              "supplier_name",
+              "供应商名称",
+              "varchar(200)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "contact",
+              "联系人",
+              "varchar(50)",
+              "可空",
+              "",
+              ""
+            ],
+            [
+              "phone",
+              "联系电话",
+              "varchar(20)",
+              "可空",
+              "",
+              "加密存储"
+            ],
+            [
+              "address",
+              "地址",
+              "varchar(500)",
+              "可空",
+              "",
+              ""
+            ],
+            [
+              "status",
+              "状态",
+              "tinyint",
+              "非空",
+              "1",
+              "0-禁用，1-启用"
+            ]
+          ],
+          "indexes": [
+            [
+              "uk_supplier_code",
+              "supplier_code",
+              "唯一索引"
+            ]
+          ],
+          "data_volume": "百级",
+          "data_retention": "永久保留"
+        },
+        {
+          "name": "customer",
+          "cn_name": "客户",
+          "has_delete_flag": true,
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "customer_code",
+              "客户编码",
+              "varchar(50)",
+              "非空",
+              "",
+              "UK"
+            ],
+            [
+              "customer_name",
+              "客户名称",
+              "varchar(200)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "contact",
+              "联系人",
+              "varchar(50)",
+              "可空",
+              "",
+              ""
+            ],
+            [
+              "phone",
+              "联系电话",
+              "varchar(20)",
+              "可空",
+              "",
+              "加密存储"
+            ]
+          ],
+          "indexes": [
+            [
+              "uk_customer_code",
+              "customer_code",
+              "唯一索引"
+            ]
+          ],
+          "data_volume": "千级/天",
+          "data_retention": "永久保留"
+        },
+        {
+          "name": "customer_address",
+          "cn_name": "客户收货地址",
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "customer_id",
+              "客户ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "关联customer"
+            ],
+            [
+              "receiver_name",
+              "收货人",
+              "varchar(50)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "receiver_phone",
+              "收货电话",
+              "varchar(20)",
+              "非空",
+              "",
+              "加密存储"
+            ],
+            [
+              "address",
+              "收货地址",
+              "varchar(500)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "is_default",
+              "是否默认",
+              "tinyint",
+              "非空",
+              "0",
+              "0-否，1-是"
+            ]
+          ],
+          "indexes": [
+            [
+              "idx_addr_customer",
+              "customer_id",
+              "普通索引"
+            ]
+          ],
+          "data_volume": "千级/天",
+          "data_retention": "永久保留"
+        },
+        {
+          "name": "warehouse",
+          "cn_name": "仓库",
+          "has_delete_flag": true,
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "warehouse_code",
+              "仓库编码",
+              "varchar(50)",
+              "非空",
+              "",
+              "UK"
+            ],
+            [
+              "warehouse_name",
+              "仓库名称",
+              "varchar(200)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "address",
+              "地址",
+              "varchar(500)",
+              "可空",
+              "",
+              ""
+            ],
+            [
+              "status",
+              "状态",
+              "tinyint",
+              "非空",
+              "1",
+              "0-禁用，1-启用"
+            ]
+          ],
+          "indexes": [
+            [
+              "uk_warehouse_code",
+              "warehouse_code",
+              "唯一索引"
+            ]
+          ],
+          "data_volume": "静态数据，个位数",
+          "data_retention": "永久保留"
+        },
+        {
+          "name": "zone",
+          "cn_name": "库区",
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "zone_code",
+              "库区编码",
+              "varchar(50)",
+              "非空",
+              "",
+              "UK"
+            ],
+            [
+              "warehouse_id",
+              "仓库ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "zone_name",
+              "库区名称",
+              "varchar(100)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "zone_type",
+              "库区类型",
+              "tinyint",
+              "非空",
+              "1",
+              "1-常温，2-冷藏，3-冷冻，4-恒温恒湿"
+            ]
+          ],
+          "indexes": [
+            [
+              "uk_zone_code",
+              "zone_code",
+              "唯一索引"
+            ],
+            [
+              "idx_zone_warehouse",
+              "warehouse_id",
+              "普通索引"
+            ]
+          ],
+          "data_volume": "静态数据，百级",
+          "data_retention": "永久保留"
+        }
+      ]
+    },
+    {
+      "name": "报表域",
+      "tables": [
+        {
+          "name": "report_template",
+          "cn_name": "报表模板",
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "template_code",
+              "模板编码",
+              "varchar(50)",
+              "非空",
+              "",
+              "UK"
+            ],
+            [
+              "template_name",
+              "模板名称",
+              "varchar(100)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "query_sql",
+              "查询SQL",
+              "text",
+              "非空",
+              "",
+              "含占位符"
+            ],
+            [
+              "cache_ttl",
+              "缓存时间(秒)",
+              "int",
+              "非空",
+              "3600",
+              ""
+            ]
+          ],
+          "indexes": [
+            [
+              "uk_template_code",
+              "template_code",
+              "唯一索引"
+            ]
+          ],
+          "data_volume": "静态数据，十级",
+          "data_retention": "永久保留"
+        },
+        {
+          "name": "report_export_record",
+          "cn_name": "报表导出记录",
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "template_id",
+              "模板ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "export_user_id",
+              "导出人ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "params",
+              "查询参数(JSON)",
+              "varchar(1000)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "file_path",
+              "导出文件路径",
+              "varchar(500)",
+              "可空",
+              "",
+              ""
+            ],
+            [
+              "file_size",
+              "文件大小(Bytes)",
+              "bigint(20)",
+              "可空",
+              "",
+              ""
+            ],
+            [
+              "status",
+              "状态",
+              "tinyint",
+              "非空",
+              "0",
+              "0-处理中，1-完成，2-失败"
+            ]
+          ],
+          "indexes": [
+            [
+              "idx_export_template",
+              "template_id",
+              "普通索引"
+            ],
+            [
+              "idx_export_user",
+              "export_user_id",
+              "普通索引"
+            ],
+            [
+              "idx_export_create",
+              "create_time",
+              "普通索引"
+            ]
+          ],
+          "data_volume": "百级/天",
+          "data_retention": "按create_time保留近1年数据"
+        }
+      ]
+    },
+    {
+      "name": "系统域",
+      "tables": [
+        {
+          "name": "user",
+          "cn_name": "用户",
+          "has_delete_flag": true,
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "username",
+              "用户名",
+              "varchar(50)",
+              "非空",
+              "",
+              "UK"
+            ],
+            [
+              "password",
+              "密码",
+              "varchar(200)",
+              "非空",
+              "",
+              "bcrypt加密"
+            ],
+            [
+              "real_name",
+              "真实姓名",
+              "varchar(50)",
+              "可空",
+              "",
+              ""
+            ],
+            [
+              "phone",
+              "手机号",
+              "varchar(20)",
+              "可空",
+              "",
+              "加密存储"
+            ],
+            [
+              "role_id",
+              "角色ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "status",
+              "状态",
+              "tinyint",
+              "非空",
+              "1",
+              "0-禁用，1-启用"
+            ],
+            [
+              "last_login_time",
+              "最后登录时间",
+              "datetime",
+              "可空",
+              "",
+              ""
+            ]
+          ],
+          "indexes": [
+            [
+              "uk_username",
+              "username",
+              "唯一索引"
+            ],
+            [
+              "idx_user_role",
+              "role_id",
+              "普通索引"
+            ]
+          ],
+          "data_volume": "静态数据，百级",
+          "data_retention": "永久保留"
+        },
+        {
+          "name": "role",
+          "cn_name": "角色",
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "role_name",
+              "角色名",
+              "varchar(50)",
+              "非空",
+              "",
+              "UK"
+            ],
+            [
+              "permissions",
+              "权限列表(JSON)",
+              "text",
+              "非空",
+              "",
+              "[\"inbound:create\",\"inbound:audit\",...]"
+            ],
+            [
+              "description",
+              "角色描述",
+              "varchar(200)",
+              "可空",
+              "",
+              ""
+            ]
+          ],
+          "indexes": [
+            [
+              "uk_role_name",
+              "role_name",
+              "唯一索引"
+            ]
+          ],
+          "data_volume": "静态数据，十级",
+          "data_retention": "永久保留"
+        },
+        {
+          "name": "operation_log",
+          "cn_name": "操作日志",
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "user_id",
+              "操作用户ID",
+              "bigint(20)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "username",
+              "操作用户名",
+              "varchar(50)",
+              "非空",
+              "",
+              "冗余，便于查询"
+            ],
+            [
+              "operation",
+              "操作类型",
+              "varchar(50)",
+              "非空",
+              "",
+              "CREATE/UPDATE/DELETE/EXPORT/AUDIT"
+            ],
+            [
+              "target",
+              "操作目标",
+              "varchar(200)",
+              "非空",
+              "",
+              "模块/表/记录ID"
+            ],
+            [
+              "request_params",
+              "请求参数",
+              "text",
+              "可空",
+              "",
+              "JSON格式"
+            ],
+            [
+              "request_result",
+              "请求结果",
+              "tinyint",
+              "非空",
+              "",
+              "0-失败，1-成功"
+            ],
+            [
+              "ip_address",
+              "操作IP",
+              "varchar(50)",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "execution_time",
+              "执行耗时(ms)",
+              "int",
+              "可空",
+              "",
+              ""
+            ]
+          ],
+          "indexes": [
+            [
+              "idx_log_user_time",
+              "user_id, create_time",
+              "联合索引"
+            ],
+            [
+              "idx_log_create_time",
+              "create_time",
+              "普通索引(归档)"
+            ]
+          ],
+          "data_volume": "百万级/天",
+          "data_retention": "按create_time按月分区，保留180天，超期自动清理"
+        },
+        {
+          "name": "sys_config",
+          "cn_name": "系统配置",
+          "fields": [
+            [
+              "id",
+              "主键ID",
+              "bigint(20)",
+              "非空",
+              "",
+              "唯一主键"
+            ],
+            [
+              "config_key",
+              "配置键",
+              "varchar(100)",
+              "非空",
+              "",
+              "UK"
+            ],
+            [
+              "config_value",
+              "配置值",
+              "text",
+              "非空",
+              "",
+              ""
+            ],
+            [
+              "config_type",
+              "配置类型",
+              "tinyint",
+              "非空",
+              "",
+              "1-业务规则，2-系统参数，3-阈值设置"
+            ],
+            [
+              "description",
+              "说明",
+              "varchar(200)",
+              "可空",
+              "",
+              ""
+            ]
+          ],
+          "indexes": [
+            [
+              "uk_config_key",
+              "config_key",
+              "唯一索引"
+            ]
+          ],
+          "data_volume": "静态数据，百级",
+          "data_retention": "永久保留"
+        }
+      ]
+    }
+  ],
+  "appendix": {
+    "数据库全局规范": [
+      "引擎: InnoDB（全部业务表）",
+      "字符集: utf8mb4 / utf8mb4_general_ci",
+      "事务隔离级别: READ COMMITTED",
+      "主键: 全部 BIGINT(20) 自增",
+      "审计字段: 所有业务表含 create_time(datetime)、update_time(datetime)、create_by(bigint)、update_by(bigint)",
+      "软删除: 业务单据表含 delete_flag(tinyint)，0-未删除，1-已删除",
+      "多租户: 所有表含 tenant_id(int)",
+      "加密字段: 手机号、地址等敏感字段应用层AES加密后存储"
+    ],
+    "分库分表策略": [
+      "分库: 按 warehouse_id 分库，V1.0单库，预留分库能力",
+      "分表: 按时间分表（月），inventory_transaction、operation_log 预留按月分区"
+    ],
+    "数据同步规则": [
+      "主从复制: MySQL MGR 组复制",
+      "缓存同步: Redis主动失效 + 懒加载",
+      "跨服务: RocketMQ 事务消息"
+    ]
+  }
+}

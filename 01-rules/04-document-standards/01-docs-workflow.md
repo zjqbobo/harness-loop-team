@@ -10,7 +10,7 @@
 
 ---
 
-## 1️⃣ 图表强制规则
+## 1-图表强制规则
 
 ### 最低要求
 每篇文档至少包含**至少包含一张：
@@ -32,7 +32,7 @@
 
 ---
 
-## 2️⃣ 脑爆方案 → 正式文档工作流
+## 2-脑爆方案-正式文档工作流
 
 ### 触发时机
 用户确认 Brainstorming / 执行计划 / 方案时，按以下流程执行：
@@ -53,7 +53,7 @@
 
 ---
 
-## 3️⃣ 图表嵌入规范
+## 3-图表嵌入规范
 
 ### fireworks-tech-graph 生成流程
 1. 生成 SVG 源文件
@@ -69,7 +69,8 @@
 
 ```bash
 # 用法：一键提取+渲染+替换
-~/.claude/harness/scripts/doc/mermaid-render.sh ./方案.md
+# 脚本路径：按 CLAUDE.md「路径解析规则」查找 scripts/doc/mermaid-render.sh
+mermaid-render.sh ./方案.md
 ```
 
 **特性：**
@@ -88,14 +89,14 @@
 在 `md2docx.sh` **之前**执行，确保 docx 中嵌入的是渲染后的 PNG 图片而非代码文字。
 
 ```bash
-# 完整流程
-~/.claude/harness/scripts/doc/mermaid-render.sh ./方案.md   # Step 1: Mermaid → PNG
-~/.claude/harness/scripts/doc/md2docx.sh ./方案.md          # Step 2: MD → DOCX
+# 完整流程（脚本路径按 CLAUDE.md「路径解析规则」查找 scripts/doc/）
+mermaid-render.sh ./方案.md   # Step 1: Mermaid → PNG
+md2docx.sh ./方案.md          # Step 2: MD → DOCX
 ```
 
 ---
 
-## 4️⃣ 标准工具脚本（禁止每次临时写脚本！）
+## 4-标准工具脚本
 
 ### Mermaid → PNG 渲染
 
@@ -103,7 +104,8 @@
 
 ```bash
 # 用法：mermaid-render.sh <md文件路径>
-~/.claude/harness/scripts/doc/mermaid-render.sh ./方案.md
+# 脚本路径：按 CLAUDE.md「路径解析规则」查找 scripts/doc/mermaid-render.sh
+mermaid-render.sh ./方案.md
 ```
 
 ### MD → DOCX 标准转换
@@ -112,7 +114,8 @@
 
 ```bash
 # 用法：md2docx.sh <md文件路径> [输出docx路径]
-~/.claude/harness/scripts/doc/md2docx.sh ./方案.md
+# 脚本路径：按 CLAUDE.md「路径解析规则」查找 scripts/doc/md2docx.sh
+md2docx.sh ./方案.md
 ```
 
 **特性：**
@@ -147,14 +150,16 @@
 
 ```bash
 # 用法：gen-physical-model.py <input.json> [output.docx]
-python3 ~/.claude/harness/scripts/doc/gen-physical-model.py ./tables.json
+# 脚本路径：按 CLAUDE.md「路径解析规则」查找 scripts/doc/gen-physical-model.py
+python3 gen-physical-model.py ./tables.json
 ```
 
 ### SVG → PNG 标准导出
 
 ```bash
 # 用法：svg2png.sh <svg目录或文件>
-~/.claude/harness/scripts/doc/svg2png.sh ./images/
+# 脚本路径：按 CLAUDE.md「路径解析规则」查找 scripts/doc/svg2png.sh
+svg2png.sh ./images/
 ```
 
 ❌ **禁止行为：**
@@ -164,7 +169,7 @@ python3 ~/.claude/harness/scripts/doc/gen-physical-model.py ./tables.json
 
 ---
 
-## 5️⃣ 模板强制遵循
+## 5-模板强制遵循
 
 ### 规则
 
@@ -201,7 +206,8 @@ python3 ~/.claude/harness/scripts/doc/gen-physical-model.py ./tables.json
 ```bash
 # 1. 准备表结构 JSON 数据文件
 # 2. 执行脚本直接生成 .docx
-python3 ~/.claude/harness/scripts/doc/gen-physical-model.py ./tables.json ./物理模型.docx
+# 脚本路径：按 CLAUDE.md「路径解析规则」查找 scripts/doc/gen-physical-model.py
+python3 gen-physical-model.py ./tables.json ./物理模型.docx
 ```
 
 JSON 数据格式见脚本注释。字段名/类型/索引/数据量级对应 `.md` 模板内容，表格样式对齐 `.docx` 模板。生成时只读 `.md` 了解字段结构，**不需要加载 `.docx` 模板到上下文**。

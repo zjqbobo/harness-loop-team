@@ -1,0 +1,4 @@
+[console_scripts]
+acm-agent = acm.__main__:main
+acm-blame = acm.collector.blame:main
+

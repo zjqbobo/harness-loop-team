@@ -1,13 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 700">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 760">
   <defs>
     <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
       <polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/>
-    </marker>
-    <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-      <polygon points="0 0, 10 3.5, 0 7" fill="#16a34a"/>
-    </marker>
-    <marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-      <polygon points="0 0, 10 3.5, 0 7" fill="#ea580c"/>
     </marker>
     <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
       <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.08"/>
@@ -18,73 +12,88 @@
     .title { font-size: 18px; font-weight: 600; fill: #111827; }
     .label { font-size: 14px; font-weight: 400; fill: #111827; }
     .sub-label { font-size: 12px; fill: #6b7280; }
-    .small { font-size: 11px; fill: #6b7280; }
+    .small { font-size: 10px; fill: #6b7280; }
   </style>
-  <rect width="960" height="700" fill="#ffffff"/>
+  <rect width="960" height="760" fill="#ffffff"/>
   <text x="480" y="32" text-anchor="middle" class="title">Harness Engineering 架构总览</text>
-  <text x="480" y="52" text-anchor="middle" class="sub-label">瘦 Skill + 胖 Harness · 自然语言触发 · Symlink 分发</text>
-  <!-- Layer 0: User Input -->
-  <rect x="300" y="72" width="360" height="52" rx="26" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5" filter="url(#shadow)"/>
-  <text x="480" y="103" text-anchor="middle" class="label">👤 用户自然语言输入</text>
-  <text x="480" y="115" text-anchor="middle" class="small" fill="#6b7280">"帮我设计一个方案" · "这个接口报错了"</text>
-  <line x1="480" y1="124" x2="480" y2="150" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
-  <!-- Layer 1: Skills Layer -->
-  <rect x="40" y="152" width="880" height="155" rx="10" fill="#fafbff" stroke="#d1d5db" stroke-width="1" stroke-dasharray="6,3"/>
-  <rect x="50" y="142" width="200" height="20" rx="4" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
-  <text x="150" y="156" text-anchor="middle" class="small" fill="#166534">~/.claude/skills/ (symlink)</text>
-  <text x="60" y="175" class="label" font-weight="600">🧠 Skill 层（瘦 — 仅 3 件事）</text>
-  <rect x="55" y="190" width="145" height="58" rx="8" fill="#ede9fe" stroke="#a78bfa" stroke-width="1" filter="url(#shadow)"/>
-  <text x="127" y="212" text-anchor="middle" class="label" font-size="11" font-weight="600">harness-entry</text>
-  <text x="127" y="232" text-anchor="middle" class="small">触发: 会话启动自动加载</text>
-  <rect x="220" y="190" width="145" height="58" rx="8" fill="#dbeafe" stroke="#60a5fa" stroke-width="1" filter="url(#shadow)"/>
-  <text x="292" y="212" text-anchor="middle" class="label" font-size="11" font-weight="600">harness-brainstorming</text>
-  <text x="292" y="232" text-anchor="middle" class="small">触发: 设计/方案/分析</text>
-  <rect x="385" y="190" width="145" height="58" rx="8" fill="#dcfce7" stroke="#4ade80" stroke-width="1" filter="url(#shadow)"/>
-  <text x="457" y="212" text-anchor="middle" class="label" font-size="11" font-weight="600">harness-document
--generation</text>
-  <text x="457" y="232" text-anchor="middle" class="small">触发: 写文档/出方案</text>
-  <rect x="550" y="190" width="145" height="58" rx="8" fill="#fef2f2" stroke="#f87171" stroke-width="1" filter="url(#shadow)"/>
-  <text x="622" y="212" text-anchor="middle" class="label" font-size="11" font-weight="600">harness-systematic
--debugging</text>
-  <text x="622" y="232" text-anchor="middle" class="small">触发: 修bug/报错</text>
-  <rect x="715" y="190" width="145" height="58" rx="8" fill="#faf5ff" stroke="#c084fc" stroke-width="1" filter="url(#shadow)"/>
-  <text x="787" y="212" text-anchor="middle" class="label" font-size="11" font-weight="600">harness-code
--review</text>
-  <text x="787" y="232" text-anchor="middle" class="small">触发: review/审查</text>
-  <rect x="55" y="260" width="145" height="58" rx="8" fill="#fff7ed" stroke="#fdba74" stroke-width="1" filter="url(#shadow)"/>
-  <text x="127" y="282" text-anchor="middle" class="label" font-size="11" font-weight="600">harness-implementation</text>
-  <text x="127" y="302" text-anchor="middle" class="small">触发: 实现/开发/写代码</text>
-  <line x1="480" y1="307" x2="480" y2="340" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
-  <!-- Layer 2: Harness Rules -->
-  <rect x="40" y="342" width="880" height="145" rx="10" fill="#fafbff" stroke="#d1d5db" stroke-width="1" stroke-dasharray="6,3"/>
-  <rect x="50" y="332" width="220" height="20" rx="4" fill="#fef2f2" stroke="#fca5a5" stroke-width="1"/>
-  <text x="160" y="346" text-anchor="middle" class="small" fill="#991b1b">  ~/.claude/harness/01-rules/ (Read 按需加载)</text>
-  <text x="60" y="365" class="label" font-weight="600">📐 规则层（胖 — 详细规范全文）</text>
-  <rect x="60" y="380" width="220" height="58" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
-  <text x="170" y="404" text-anchor="middle" class="label" font-size="12" font-weight="600">02-development-workflow/</text>
-  <text x="170" y="424" text-anchor="middle" class="small">编码规范 · 8层模板 · TDD</text>
-  <rect x="310" y="380" width="220" height="58" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
-  <text x="420" y="404" text-anchor="middle" class="label" font-size="12" font-weight="600">04-document-standards/</text>
-  <text x="420" y="424" text-anchor="middle" class="small">文档规范 · 模板遵循 · 图表</text>
-  <rect x="560" y="380" width="220" height="58" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
-  <text x="670" y="404" text-anchor="middle" class="label" font-size="12" font-weight="600">docs-workflow.md</text>
-  <text x="670" y="424" text-anchor="middle" class="small">md2docx · mermaid-render · svg2png</text>
-  <line x1="480" y1="487" x2="480" y2="520" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
-  <!-- Layer 3: Foundation -->
-  <rect x="40" y="522" width="880" height="70" rx="10" fill="#fafbff" stroke="#d1d5db" stroke-width="1" stroke-dasharray="6,3"/>
-  <text x="60" y="545" class="label" font-weight="600">🏗️ 基础设施层</text>
-  <rect x="60" y="555" width="190" height="30" rx="6" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
-  <text x="155" y="574" text-anchor="middle" class="small" fill="#111827">00-harness-core/  10阶段流水线 · 5质量门禁</text>
-  <rect x="260" y="555" width="190" height="30" rx="6" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
-  <text x="355" y="574" text-anchor="middle" class="small" fill="#111827">09-templates/  文档模板 · PRD · 设计文档</text>
-  <rect x="460" y="555" width="190" height="30" rx="6" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
-  <text x="555" y="574" text-anchor="middle" class="small" fill="#111827">scripts/doc/  mermaid-render · md2docx</text>
-  <rect x="660" y="555" width="190" height="30" rx="6" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
-  <text x="755" y="574" text-anchor="middle" class="small" fill="#111827">install.sh  一键安装 · symlink 注册</text>
-  <!-- Distribution -->
-  <rect x="750" y="615" width="170" height="65" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5" filter="url(#shadow)"/>
-  <text x="835" y="638" text-anchor="middle" class="label" font-weight="600">🚀 团队分发</text>
-  <text x="835" y="655" text-anchor="middle" class="small" fill="#166534">git clone + ./install.sh</text>
-  <text x="835" y="670" text-anchor="middle" class="small" fill="#166534">git pull 即可更新</text>
-  <text x="480" y="692" text-anchor="middle" class="small">开源 GitHub 仓库 · 所有内容通过 symlink 自动生效 · 无需手动复制</text>
+  <text x="480" y="52" text-anchor="middle" class="sub-label">瘦 Skill + 胖 Harness · 自然语言触发 · Symlink 分发 · 知识沉淀 · 指标监控</text>
+  <rect x="300" y="70" width="360" height="46" rx="23" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="480" y="92" text-anchor="middle" class="label">👤 用户自然语言输入</text>
+  <text x="480" y="108" text-anchor="middle" class="small">"帮我设计一个方案" · "审核方案" · "拆任务" · "帮我做下压测"</text>
+  <line x1="480" y1="116" x2="480" y2="140" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <rect x="10" y="142" width="940" height="165" rx="10" fill="#fafbff" stroke="#d1d5db" stroke-width="1" stroke-dasharray="6,3"/>
+  <rect x="20" y="132" width="230" height="20" rx="4" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+  <text x="135" y="146" text-anchor="middle" class="small" fill="#166534">~/.claude/skills/ (symlink · 10 Skills)</text>
+  <text x="30" y="165" class="label" font-weight="600">🧠 Skill 层（瘦 — 仅 3 件事：触发匹配 + 纪律强制 + 规则引用）</text>
+  <rect x="25" y="178" width="170" height="52" rx="8" fill="#ede9fe" stroke="#a78bfa" stroke-width="1" filter="url(#shadow)"/>
+  <text x="110" y="199" text-anchor="middle" class="small" font-weight="600">harness-entry</text>
+  <text x="110" y="218" text-anchor="middle" class="small">会话启动·分诊</text>
+  <rect x="205" y="178" width="170" height="52" rx="8" fill="#dbeafe" stroke="#60a5fa" stroke-width="1" filter="url(#shadow)"/>
+  <text x="290" y="199" text-anchor="middle" class="small" font-weight="600">harness-brainstorming</text>
+  <text x="290" y="218" text-anchor="middle" class="small">设计/方案/分析</text>
+  <rect x="385" y="178" width="170" height="52" rx="8" fill="#fce7f3" stroke="#f9a8d4" stroke-width="1" filter="url(#shadow)"/>
+  <text x="470" y="199" text-anchor="middle" class="small" font-weight="600">harness-design-review</text>
+  <text x="470" y="218" text-anchor="middle" class="small">审核方案</text>
+  <rect x="565" y="178" width="170" height="52" rx="8" fill="#dcfce7" stroke="#4ade80" stroke-width="1" filter="url(#shadow)"/>
+  <text x="650" y="199" text-anchor="middle" class="small" font-weight="600">harness-doc-gen</text>
+  <text x="650" y="218" text-anchor="middle" class="small">写文档/出方案</text>
+  <rect x="745" y="178" width="170" height="52" rx="8" fill="#fef2f2" stroke="#f87171" stroke-width="1" filter="url(#shadow)"/>
+  <text x="830" y="199" text-anchor="middle" class="small" font-weight="600">harness-debugging</text>
+  <text x="830" y="218" text-anchor="middle" class="small">修bug/报错</text>
+  <rect x="25" y="240" width="170" height="52" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1" filter="url(#shadow)"/>
+  <text x="110" y="261" text-anchor="middle" class="small" font-weight="600">harness-code-review</text>
+  <text x="110" y="280" text-anchor="middle" class="small">review/审查</text>
+  <rect x="205" y="240" width="170" height="52" rx="8" fill="#fff7ed" stroke="#fdba74" stroke-width="1" filter="url(#shadow)"/>
+  <text x="290" y="261" text-anchor="middle" class="small" font-weight="600">harness-implementation</text>
+  <text x="290" y="280" text-anchor="middle" class="small">实现/开发</text>
+  <rect x="385" y="240" width="170" height="52" rx="8" fill="#faf5ff" stroke="#c084fc" stroke-width="1" filter="url(#shadow)"/>
+  <text x="470" y="261" text-anchor="middle" class="small" font-weight="600">harness-testing</text>
+  <text x="470" y="280" text-anchor="middle" class="small">单测+E2E+压测</text>
+  <rect x="565" y="240" width="170" height="52" rx="8" fill="#e0f2fe" stroke="#38bdf8" stroke-width="1" filter="url(#shadow)"/>
+  <text x="650" y="261" text-anchor="middle" class="small" font-weight="600">harness-pmo</text>
+  <text x="650" y="280" text-anchor="middle" class="small">拆任务/排期</text>
+  <rect x="745" y="240" width="170" height="52" rx="8" fill="#f5f5f4" stroke="#a8a29e" stroke-width="1" filter="url(#shadow)"/>
+  <text x="830" y="261" text-anchor="middle" class="small" font-weight="600">harness-init</text>
+  <text x="830" y="280" text-anchor="middle" class="small">初始化项目规范</text>
+  <line x1="480" y1="307" x2="480" y2="335" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <rect x="10" y="337" width="940" height="115" rx="10" fill="#fafbff" stroke="#d1d5db" stroke-width="1" stroke-dasharray="6,3"/>
+  <rect x="20" y="327" width="250" height="20" rx="4" fill="#fef2f2" stroke="#fca5a5" stroke-width="1"/>
+  <text x="145" y="341" text-anchor="middle" class="small" fill="#991b1b">~/.claude/harness/01-rules/ (按需加载)</text>
+  <text x="30" y="360" class="label" font-weight="600">📐 规则层（详细规范全文 — Skill 按需 Read）</text>
+  <rect x="25" y="373" width="220" height="38" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
+  <text x="135" y="390" text-anchor="middle" class="small" font-weight="600">02-development-workflow/</text>
+  <text x="135" y="404" text-anchor="middle" class="small">TDD·8层模板·测试标准</text>
+  <rect x="265" y="373" width="220" height="38" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
+  <text x="375" y="390" text-anchor="middle" class="small" font-weight="600">04-document-standards/</text>
+  <text x="375" y="404" text-anchor="middle" class="small">文档规范·PRD·原型·图表</text>
+  <rect x="505" y="373" width="220" height="38" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
+  <text x="615" y="390" text-anchor="middle" class="small" font-weight="600">docs/coding-standards/</text>
+  <text x="615" y="404" text-anchor="middle" class="small">7技术栈编码规范</text>
+  <rect x="745" y="373" width="220" height="38" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
+  <text x="855" y="390" text-anchor="middle" class="small" font-weight="600">docs/patterns/</text>
+  <text x="855" y="404" text-anchor="middle" class="small">推荐模式·反模式·审核·PMO</text>
+  <line x1="480" y1="452" x2="480" y2="483" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <rect x="10" y="485" width="940" height="95" rx="10" fill="#fafbff" stroke="#d1d5db" stroke-width="1" stroke-dasharray="6,3"/>
+  <text x="30" y="508" class="label" font-weight="600">🏗️ 基础设施层</text>
+  <rect x="25" y="518" width="175" height="28" rx="6" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
+  <text x="112" y="536" text-anchor="middle" class="small">00-harness-core/ 流水线+知识索引</text>
+  <rect x="210" y="518" width="175" height="28" rx="6" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
+  <text x="297" y="536" text-anchor="middle" class="small">09-templates/ 文档模板</text>
+  <rect x="395" y="518" width="175" height="28" rx="6" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
+  <text x="482" y="536" text-anchor="middle" class="small">scripts/doc/ 图表渲染+转换</text>
+  <rect x="580" y="518" width="175" height="28" rx="6" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
+  <text x="667" y="536" text-anchor="middle" class="small">scripts/acm/ AI效能指标</text>
+  <rect x="765" y="518" width="175" height="28" rx="6" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
+  <text x="852" y="536" text-anchor="middle" class="small">install.sh 一键安装</text>
+  <rect x="210" y="552" width="220" height="24" rx="6" fill="#fef3c7" stroke="#f59e0b" stroke-width="1"/>
+  <text x="320" y="568" text-anchor="middle" class="small" fill="#92400e">🔴 知识沉淀: 修复错误 + 设计决策 + 踩坑记录</text>
+  <rect x="590" y="600" width="340" height="68" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="760" y="621" text-anchor="middle" class="label" font-weight="600">📊 ACM Agent（AI 编程效能指标）</text>
+  <text x="760" y="639" text-anchor="middle" class="small">git post-commit hook → 自动采集 AI 代码占比</text>
+  <text x="760" y="657" text-anchor="middle" class="small">按项目/语言/时段统计 · 零手动操作</text>
+  <rect x="78" y="600" width="170" height="68" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="163" y="621" text-anchor="middle" class="label" font-weight="600">🚀 团队分发</text>
+  <text x="163" y="641" text-anchor="middle" class="small">git clone + ./install.sh</text>
+  <text x="163" y="659" text-anchor="middle" class="small">git pull 即可全局更新</text>
+  <text x="480" y="740" text-anchor="middle" class="small" fill="#9ca3af">开源 GitHub 仓库 · 三层覆盖架构（项目 .harness/ > 公司 harness.local/ > 默认 harness/）· symlink 自动生效</text>
 </svg>

@@ -9,7 +9,8 @@
 
 ```
 模板文件: 09-templates/系统设计文档模板.md
-         物理模型: 09-templates/系统物理模型设计文档模版.md
+         物理模型: 09-templates/系统物理模型设计文档模版.md（Markdown渲染模板）
+                  09-templates/系统物理模型设计文档-数据格式.json（结构化数据schema）
          接口设计: 09-templates/系统接口设计文档模版.md
 
 安装后路径: ~/.claude/templates/
@@ -25,7 +26,9 @@
 
 ## 🔴 强制执行规则
 1. **必须按 7 大章节结构输出，禁止缺省章节**
-2. **物理模型设计必须独立成文，遵循《系统物理模型设计文档模板》**
+2. **物理模型设计必须独立成文，遵循两阶段流程（见下方 HARD RULE）**
+   - 阶段1：按 09-templates/系统物理模型设计文档-数据格式.json 生成结构化 JSON
+   - 阶段2：按 09-templates/系统物理模型设计文档模版.md 渲染为 Markdown
    - 字段、其他信息、索引、数据量级、归档规则统一在表格内呈现
 3. **接口设计必须独立成文，遵循《系统接口设计文档模板》**
    - 每个接口包含：服务端点、请求参数、返回码说明、数据字典、范例请求 5 个子项
@@ -134,6 +137,31 @@
 |------|---------|
 | 文档头 | 版本历史表（版本/状态、作者、变更日期、备注、审阅） |
 | 按模块划分 | 每个模块下包含多张数据表定义：<br>**每张表使用统一表格结构，包含6列：字段、字段名称、类型(长度)、是否可空、默认值、说明**<br>　　- 业务字段定义<br>　　- 其他信息（create_time、update_time、delete_flag、tenant_id等通用字段）<br>　　- 索引（索引名称、字段、类型）<br>　　- 数据量级（数据增量/天）<br>　　- 归档规则（数据存储时效） |
+
+### 🔴 物理模型生成流程（HARD RULE）
+
+**生成物理模型文档必须遵循以下两阶段流程，禁止跳过 JSON 中间层直接写 Markdown：**
+
+```
+阶段1（结构化中间数据）：
+  1. 读取 09-templates/系统物理模型设计文档-数据格式.json 理解数据 schema
+  2. 按 JSON schema 结构生成完整物理模型数据：
+     - domains[] → 按业务域分组
+     - 每张表：fields[][]（6列数组）、indexes[][]（3列数组）、data_volume、data_retention
+     - has_create_by / has_update_by / has_delete_flag 显式声明审计字段
+     - appendix 含数据库全局规范、分库分表策略、数据同步规则
+  3. 向用户展示 JSON 数据请确认，确认后进入阶段2
+
+阶段2（Markdown 渲染 + DOCX 生成）：
+  4. 读取 09-templates/系统物理模型设计文档模版.md 获取渲染模板
+  5. 将阶段1的 JSON 数据按模板渲染为 Markdown 表格文档（供审阅）
+  6. 🔴 DOCX 交付件必须使用 gen-physical-model.py 从 JSON 直接生成，禁止通过 pandoc 从 md 转换
+     - 脚本路径: scripts/doc/gen-physical-model.py
+     - 用法: python3 scripts/doc/gen-physical-model.py <input.json> <output.docx>
+     - 原因: pandoc 转换丢失单元格合并、表头着色、字体设置；gen-physical-model.py 生成的 docx 格式与标准模板一致
+```
+
+**为什么需要 JSON 中间层**：Markdown 表格无法表达"其他信息""索引""数据量级""归档规则"等逻辑分隔行（相当于单元格合并语义），AI 直接写 Markdown 时会丢失层次关系。JSON 的嵌套结构天然表达这些层次，确保生成的 Markdown 表格结构正确。
 
 ---
 

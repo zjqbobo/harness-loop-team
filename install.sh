@@ -200,31 +200,101 @@ echo -e "   ${GREEN}✅${NC} CLAUDE.md → ${CLAUDE_MD_SRC}"
 echo ""
 echo -e "${CYAN}📊 安装 ACM Agent (AI 编程效能指标采集)...${NC}"
 
+# ── 读取 ACM 服务端地址 ──
+ACM_CONFIG_FILE="${HOME}/.acm/config"
+if [ -f "${ACM_CONFIG_FILE}" ]; then
+    ACM_SERVER_URL=$(grep '^ACM_SERVER_URL=' "${ACM_CONFIG_FILE}" | cut -d'=' -f2-)
+fi
+if [ -z "${ACM_SERVER_URL:-}" ]; then
+    read -p "   ACM 服务端地址 (默认: http://localhost:8080): " ACM_SERVER_URL
+    ACM_SERVER_URL="${ACM_SERVER_URL:-http://localhost:8080}"
+    mkdir -p "$(dirname "${ACM_CONFIG_FILE}")"
+    echo "ACM_SERVER_URL=${ACM_SERVER_URL}" > "${ACM_CONFIG_FILE}"
+fi
+echo -e "   ${GREEN}✅${NC} ACM Server: ${ACM_SERVER_URL}"
+
 ACM_DIR="${HARNESS_DIR}/scripts/acm"
-ACM_HOOK_SRC="${ACM_DIR}/hooks/post-commit"
+ACM_HOOKS_SRC="${ACM_DIR}/hooks"
 ACM_PENDING_DIR="${HOME}/.acm/pending"
 ACM_BLAME_DIR="${HOME}/.acm/blame"
+ACM_GLOBAL_HOOKS="${HOME}/.acm/hooks"
+ACM_TEMPLATE_DIR="${HOME}/.claude/harness/scripts/acm/git-template"
+ACM_TEMPLATE_HOOKS="${ACM_TEMPLATE_DIR}/hooks"
 
-if [ -f "${ACM_HOOK_SRC}" ]; then
-    echo -e "   ${GREEN}✅${NC} ACM hook 源文件: ${ACM_HOOK_SRC}"
+if [ -f "${ACM_HOOKS_SRC}/post-commit" ]; then
+    echo -e "   ${GREEN}✅${NC} ACM hook 源文件: ${ACM_HOOKS_SRC}"
 else
-    echo -e "   ${RED}❌${NC} ACM hook 源文件缺失: ${ACM_HOOK_SRC}"
+    echo -e "   ${RED}❌${NC} ACM hook 源文件缺失: ${ACM_HOOKS_SRC}"
 fi
 
-# 安装 Python agent
-echo -e "   ${CYAN}🐍 安装 ACM Python 包...${NC}"
-cd "${ACM_DIR}" && pip3 install -e "." --quiet 2>&1 | tail -1 || echo -e "   ${YELLOW}⚠${NC}  Python 包安装失败（可后续手动: pip3 install -e ${ACM_DIR}）"
+# 安装 Python agent（隔离 venv，不写系统 Python）
+echo -e "   ${CYAN}🐍 安装 ACM Python 环境...${NC}"
+ACM_VENV="${HOME}/.acm/venv"
+if [ ! -x "${ACM_VENV}/bin/python" ]; then
+    if python3 -m venv "${ACM_VENV}" 2>&1; then
+        "${ACM_VENV}/bin/pip" install --quiet --upgrade pip 2>&1 || true
+        "${ACM_VENV}/bin/pip" install --quiet "requests>=2.28" 2>&1 || true
+        echo -e "   ${GREEN}✅${NC} ACM venv: ${ACM_VENV}"
+    else
+        echo -e "   ${YELLOW}⚠${NC}  venv 创建失败（已有 Python 3 即可，不影响 skill 安装）"
+    fi
+else
+    echo -e "   ${GREEN}✅${NC} ACM venv 已存在: ${ACM_VENV}"
+fi
+# 确保 post-commit hook 使用 venv 中的 Python
+if [ -x "${ACM_VENV}/bin/python" ]; then
+    echo "ACM_PYTHON=${ACM_VENV}/bin/python" > "${HOME}/.acm/env"
+    echo -e "   ${GREEN}✅${NC} ACM_PYTHON 写入 ~/.acm/env"
+fi
 
 # 创建本地数据目录
 mkdir -p "${ACM_PENDING_DIR}"
 mkdir -p "${ACM_BLAME_DIR}"
 echo -e "   ${GREEN}✅${NC} 数据目录: ~/.acm/"
 
-# 创建全局 hook 安装命令
-ACM_HOOK_INSTALL_CMD="cp ${ACM_HOOK_SRC} .git/hooks/post-commit && chmod +x .git/hooks/post-commit"
-echo -e "   ${GREEN}✅${NC} ACM Agent 安装完成"
-echo -e "   ℹ️  在仓库中执行以下命令启用 AI 指标采集:"
-echo -e "   ${YELLOW}     ${ACM_HOOK_INSTALL_CMD}${NC}"
+# ── 安装 ACM hooks + Python 脚本到 ~/.acm/hooks/ ──
+mkdir -p "${ACM_GLOBAL_HOOKS}"
+cp "${ACM_HOOKS_SRC}/"* "${ACM_GLOBAL_HOOKS}/"
+chmod +x "${ACM_GLOBAL_HOOKS}/"*
+echo -e "   ${GREEN}✅${NC} ACM hooks: ${ACM_GLOBAL_HOOKS}/"
+
+# ── Git init.templateDir（新 clone 仓库走模板）──
+mkdir -p "${ACM_TEMPLATE_HOOKS}"
+cp "${ACM_HOOKS_SRC}/"* "${ACM_TEMPLATE_HOOKS}/"
+chmod +x "${ACM_TEMPLATE_HOOKS}/"*
+git config --global init.templateDir "${ACM_TEMPLATE_DIR}"
+echo -e "   ${GREEN}✅${NC} Git 模板目录: ${ACM_TEMPLATE_DIR}"
+
+# ── 注入 ACM 到已有 hooksPath（保护原有 hook）──
+EXISTING_HOOKSPATH=$(git config --global core.hooksPath 2>/dev/null || true)
+if [ -n "${EXISTING_HOOKSPATH}" ]; then
+    EXISTING_POSTCOMMIT="${EXISTING_HOOKSPATH/\~/${HOME}}/post-commit"
+    if [ -f "${EXISTING_POSTCOMMIT}" ] && ! grep -q ".acm/hooks/post-commit" "${EXISTING_POSTCOMMIT}" 2>/dev/null; then
+        # 在 exit 之前注入 ACM 调用
+        if grep -q "^exit " "${EXISTING_POSTCOMMIT}"; then
+            sed -i '' "/^exit /i\\
+# ACM AI metrics collection\\
+if [ -x \"\$HOME/.acm/hooks/post-commit\" ]; then\\
+    \"\$HOME/.acm/hooks/post-commit\" \"\$@\" || true\\
+fi
+" "${EXISTING_POSTCOMMIT}"
+        else
+            echo "" >> "${EXISTING_POSTCOMMIT}"
+            echo "# ACM AI metrics collection" >> "${EXISTING_POSTCOMMIT}"
+            echo "if [ -x \"\$HOME/.acm/hooks/post-commit\" ]; then" >> "${EXISTING_POSTCOMMIT}"
+            echo "    \"\$HOME/.acm/hooks/post-commit\" \"\$@\" || true" >> "${EXISTING_POSTCOMMIT}"
+            echo "fi" >> "${EXISTING_POSTCOMMIT}"
+        fi
+        echo -e "   ${GREEN}✅${NC} ACM 已注入到现有 hooksPath: ${EXISTING_POSTCOMMIT}"
+    elif [ -f "${EXISTING_POSTCOMMIT}" ]; then
+        echo -e "   ${GREEN}✅${NC} ACM 已存在于: ${EXISTING_POSTCOMMIT}"
+    fi
+else
+    git config --global core.hooksPath "${ACM_GLOBAL_HOOKS}"
+    echo -e "   ${GREEN}✅${NC} core.hooksPath: ${ACM_GLOBAL_HOOKS}"
+fi
+
+echo -e "   ${GREEN}✅${NC} ACM Agent 安装完成，无需手动操作"
 
 # ── 4. 创建公司级覆盖目录 ──────────────────────────────────────
 
@@ -303,19 +373,23 @@ echo -e "${GREEN}╔════════════════════
 echo -e "${GREEN}║  ✅ Harness Engineering 安装完成         ║${NC}"
 echo -e "${GREEN}╠══════════════════════════════════════════╣${NC}"
 echo -e "${GREEN}║                                           ║${NC}"
+echo -e "${GREEN}║  🎯 v2.0 新增：设计文档智能索引             ║${NC}"
+echo -e "${GREEN}║  大文档按需加载，节省上下文消耗              ║${NC}"
+echo -e "${GREEN}║                                           ║${NC}"
 echo -e "${GREEN}║  现在你可以用自然语言触发所有能力：          ║${NC}"
 echo -e "${GREEN}║  • \"帮我设计...\" → brainstorming          ║${NC}"
+echo -e "${GREEN}║  • \"审核方案...\" → design-review          ║${NC}"
 echo -e "${GREEN}║  • \"帮我写方案...\" → 文档生成全流程         ║${NC}"
 echo -e "${GREEN}║  • \"帮我修bug...\" → 系统调试               ║${NC}"
 echo -e "${GREEN}║  • \"帮我review...\" → 代码审查              ║${NC}"
+echo -e "${GREEN}║  • \"初始化项目规范...\" → harness-init       ║${NC}"
 echo -e "${GREEN}║  • \"帮我实现...\" → TDD + 编码规范          ║${NC}"
+echo -e "${GREEN}║  • \"拆任务/排期...\" → 项目管理(PMO)        ║${NC}"
 echo -e "${GREEN}║  • \"帮我写测试...\" → 单测 + E2E             ║${NC}"
 echo -e "${GREEN}║  • \"帮我做下压测...\" → 压力测试+性能报告    ║${NC}"
 echo -e "${GREEN}║                                           ║${NC}"
-echo -e "${GREEN}║  📊 ACM Agent 已安装                       ║${NC}"
-echo -e "${GREEN}║  启用 AI 指标采集:                          ║${NC}"
-echo -e "${GREEN}║  cp ~/.claude/harness/scripts/acm/hooks/   ║${NC}"
-echo -e "${GREEN}║     post-commit .git/hooks/                ║${NC}"
+echo -e "${GREEN}║  📊 ACM Agent 已安装（自动生效）            ║${NC}"
+echo -e "${GREEN}║  AI 指标采集已启用，无需手动操作              ║${NC}"
 echo -e "${GREEN}║                                           ║${NC}"
 echo -e "${GREEN}║  更新: cd ~/.claude/harness && git pull    ║${NC}"
 echo -e "${GREEN}║  定制: ~/.claude/harness.local/ 覆盖模板/知识库 ║${NC}"

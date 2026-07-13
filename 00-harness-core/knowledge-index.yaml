@@ -1,0 +1,130 @@
+# knowledge-index.yaml — Harness 知识索引
+# 用途：沉淀判重 + 加载发现 + 知识资产可视化
+# 位置：00-harness-core/（中枢元数据，横切所有子目录）
+# 加载时机：按需加载，仅在错误沉淀判重时读取
+# 三层覆盖：项目 .harness/ > ~/.claude/harness.local/ > ~/.claude/harness/
+
+version: 1
+
+entries:
+  - id: ks-001
+    title: "文档图表渲染必须用标准脚本"
+    type: process
+    severity: high
+    tags: [document, diagram, script, automation]
+    location: scripts/doc/doc-pipeline.sh
+    source_change: 20260520-smart-logger-component
+    created: "2026-05-20"
+    updated: "2026-05-20"
+    summary: "文档图表渲染+替换+转DOCX必须用doc-pipeline.sh/render-diagrams.sh，禁止手动逐个替换或手写SVG脚本"
+  - id: ks-002
+    title: "fireworks-tech-graph必须按技能脚本执行"
+    type: anti-pattern
+    severity: high
+    tags: [document, diagram, fireworks, skill]
+    location: skills/harness-document-generation/SKILL.md
+    source_change: 20260520-smart-logger-component
+    created: "2026-05-20"
+    updated: "2026-05-20"
+    summary: "用户选fireworks-tech-graph后必须用其generate-from-template.py/generate-diagram.sh生成SVG，禁止跳过技能直接手写Python拼SVG"
+  - id: ks-003
+    title: "brainstorming确认后禁止跳过Step8直接实施"
+    type: process
+    severity: high
+    tags: [process, pipeline, brainstorming, discipline, handoff]
+    location: 02-skills-source/harness-brainstorming/SKILL.md#HARD-GATE
+    source_change: 20260602-ai-native-collaboration-pipeline
+    created: "2026-06-02"
+    updated: "2026-06-02"
+    summary: "用户确认spec后必须执行Step8三选一询问，禁止将确认话语等同于同意直接实施"
+  - id: ks-004
+    title: "用户批评质疑后必须先执行沉淀评估"
+    type: process
+    severity: high
+    tags: [process, pipeline, discipline, error-handling, feedback]
+    location: 02-skills-source/harness-entry/SKILL.md#HARD-GATE
+    source_change: 20260602-ai-native-collaboration-pipeline
+    created: "2026-06-02"
+    updated: "2026-06-02"
+    summary: "用户批评/质疑AI行为时属于流程违规触发条件，必须先执行沉淀评估，不得先补救再评估"
+  - id: ks-005
+    title: "编码前必须逐文件读取场景匹配的规范"
+    type: process
+    severity: high
+    tags: [process, implementation, discipline, coding-standards]
+    location: skills/harness-implementation/SKILL.md#按场景选择性深入
+    source_change: state-machine-component
+    created: "2026-06-03"
+    updated: "2026-06-03"
+    summary: "读完技术栈00-index.md索引后，必须根据场景匹配表逐文件Read详细规范，禁止仅凭索引摘要编码"
+  - id: ks-006
+    title: "触发边界未覆盖变体动作词"
+    type: process
+    severity: high
+    tags: [process, trigger-boundary, harness-entry, discipline, nlp]
+    location: 02-skills-source/harness-entry/SKILL.md#触发边界
+    source_change: 20260608-ai-native-collaboration-pipeline-v2
+    created: "2026-06-08"
+    updated: "2026-06-08"
+    summary: "用户说'评估+优化完善方案'时，AI未识别为工程动作词（'评估'不在触发词列表，'优化完善'被理解为直接指令），跳过了harness-entry分诊路由"
+  - id: ks-007
+    title: "方案审核检查清单"
+    type: knowledge
+    severity: medium
+    tags: [design-review, checklist, quality, brainstorming]
+    location: docs/patterns/review-checklist.md
+    source_change: 20260609-pmo-design-review
+    created: "2026-06-09"
+    updated: "2026-06-09"
+    summary: "方案审核的四检查面（范围完整性/内部一致性/可行性/风险覆盖）及常见遗漏模式参考"
+  - id: ks-008
+    title: "PMO拆解工作流与Excel模板"
+    type: knowledge
+    severity: medium
+    tags: [pmo, project-management, milestone, epic, user-story, task, excel]
+    location: docs/patterns/pmo-workflow.md
+    source_change: 20260609-pmo-design-review
+    created: "2026-06-09"
+    updated: "2026-06-09"
+    summary: "里程碑→史诗→用户故事→任务的拆解层次、优先级定义(P0/P1/P2)、Excel多Sheet格式化输出(openpyxl+颜色编码)及代码参考模板"
+  - id: ks-009
+    title: "E2E脚本禁止硬编码本机浏览器路径"
+    type: rule
+    severity: medium
+    tags: [testing, e2e, playwright, portability, browser]
+    location: 01-rules/02-development-workflow/01-testing-standards.md#浏览器路径可移植性
+    source_change: 20260614-store-ai-training-platform
+    created: "2026-06-14"
+    updated: "2026-06-14"
+    summary: "E2E脚本不能写死本机Playwright/Chrome路径；需要指定时通过环境变量传入，保持跨机器可运行"
+  - id: ks-010
+    title: "会话恢复必须继承pipeline-state的depth/demand_type"
+    type: process
+    severity: high
+    tags: [process, pipeline, session-resume, harness-entry, discipline]
+    location: docs/patterns/session-resume-inherit-pipeline-state.md
+    source_change: 20260615-store-training-platform
+    created: "2026-06-15"
+    updated: "2026-06-15"
+    summary: "恢复进行中变更时，depth和demand_type必须从pipeline-state.json直接继承，禁止重新执行分诊提问"
+  - id: ks-011
+    title: "技术设计交付后必须询问下一步"
+    type: process
+    severity: high
+    tags: [process, document-generation, technical-design, design-review, implementation, handoff]
+    location: 02-skills-source/harness-document-generation/SKILL.md#PRD-后技术设计门禁完整工程
+    source_change: 20260615-store-training-platform
+    created: "2026-06-15"
+    updated: "2026-06-15"
+    summary: "PRD后续技术设计文档交付后，必须询问审核技术方案/直接编码/暂不继续，禁止只问是否编码"
+  # 条目格式：
+  # - id: ks-001                          # 自增序号，ks-NNN 格式
+  #   title: "简明标题 ≤30字"
+  #   type: rule                          # rule | anti-pattern | knowledge | process
+  #   severity: medium                    # high | medium | low
+  #   tags: [tag1, tag2]                  # 判重匹配维度，重叠>50%视为同类
+  #   location: docs/path/to/file.md#anchor  # 精确到文件+锚点
+  #   source_change: 20260520-xxx         # 溯源变更（可选）
+  #   created: "2026-05-20"
+  #   updated: "2026-05-20"
+  #   summary: "一句话描述 ≤80字"
