@@ -1,8 +1,8 @@
 # Harness Engineering
 
-一套开源 AI Agent 工程纪律体系，通过纯文本 Markdown 技能文件为 Claude Code 注入工程纪律。
+一套开源 AI Agent 工程纪律体系，通过纯文本 Markdown 技能文件为 Claude Code 注入工程纪律。完美融合Harness与Loop工程
 
-**与 [Superpowers](https://github.com/anthropics/superpowers) 同源的设计哲学**：AI 编程缺的不是智力，是纪律，而纪律可以用纯文本分发。
+AI 编程缺的不是智力，是纪律，而纪律可以用纯文本分发。
 
 ## 快速开始
 
